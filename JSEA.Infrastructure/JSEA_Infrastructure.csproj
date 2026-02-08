@@ -10,4 +10,8 @@
     <Folder Include="Context\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\JSEA_Application\JSEA_Application.csproj" />
+  </ItemGroup>
+
 </Project>
