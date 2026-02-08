@@ -1,0 +1,6 @@
+@JSEA.Presentation_HostAddress = http://localhost:5062
+
+GET {{JSEA.Presentation_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
