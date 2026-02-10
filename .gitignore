@@ -482,3 +482,9 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# ===============================
+# ASP.NET Core appsettings (secrets)
+# ===============================
+appsettings.json
+appsettings.Development.json

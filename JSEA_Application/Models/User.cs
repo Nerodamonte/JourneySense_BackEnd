@@ -101,9 +101,9 @@ public partial class User
     [InverseProperty("Traveler")]
     public virtual ICollection<Visit> Visits { get; set; } = new List<Visit>();
 
-    [Column("role")]
+    [Column("role", TypeName = "user_role")]
     public UserRole Role { get; set; }
 
-    [Column("status")]
+    [Column("status", TypeName = "user_status")]
     public UserStatus Status { get; set; }
 }

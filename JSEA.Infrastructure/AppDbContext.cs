@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using JSEA_Application.Models;
 using JSEA_Application.Enums;
+using Npgsql.EntityFrameworkCore.PostgreSQL;
 
 namespace JSEA_Infrastructure;
 
