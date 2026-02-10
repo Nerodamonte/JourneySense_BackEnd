@@ -1,4 +1,13 @@
+using JSEA_Infrastructure;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(connectionString, o =>
+        o.UseNetTopologySuite()
+    ));
 
 // Add services to the container.
 
