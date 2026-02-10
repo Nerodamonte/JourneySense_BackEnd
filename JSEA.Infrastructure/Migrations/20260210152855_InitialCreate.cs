@@ -9,7 +9,7 @@ using NetTopologySuite.Geometries;
 namespace JSEA_Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitFullDatabase : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -53,24 +53,6 @@ namespace JSEA_Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "experience_metrics",
-                columns: table => new
-                {
-                    experience_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    featured_score = table.Column<decimal>(type: "numeric(3,2)", precision: 3, scale: 2, nullable: true),
-                    total_visits = table.Column<int>(type: "integer", nullable: true, defaultValue: 0),
-                    total_ratings = table.Column<int>(type: "integer", nullable: true, defaultValue: 0),
-                    avg_rating = table.Column<decimal>(type: "numeric(2,1)", precision: 2, scale: 1, nullable: true, defaultValueSql: "0"),
-                    acceptance_rate = table.Column<decimal>(type: "numeric(3,2)", precision: 3, scale: 2, nullable: true),
-                    last_visit_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("experience_metrics_pkey", x => x.experience_id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "packages",
                 columns: table => new
                 {
@@ -78,8 +60,8 @@ namespace JSEA_Infrastructure.Migrations
                     title = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     price = table.Column<decimal>(type: "numeric(12,2)", precision: 12, scale: 2, nullable: true),
                     sale_price = table.Column<decimal>(type: "numeric(12,2)", precision: 12, scale: 2, nullable: true),
-                    benefit = table.Column<string>(type: "jsonb", nullable: true, comment: "Lưu các quyền lợi của gói"),
-                    km = table.Column<int>(type: "integer", nullable: true, comment: "Giới hạn km hoặc thuộc tính liên quan"),
+                    benefit = table.Column<string>(type: "jsonb", nullable: true),
+                    km = table.Column<int>(type: "integer", nullable: true),
                     is_popular = table.Column<bool>(type: "boolean", nullable: true, defaultValue: false),
                     is_active = table.Column<bool>(type: "boolean", nullable: true, defaultValue: true),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()"),
@@ -89,28 +71,6 @@ namespace JSEA_Infrastructure.Migrations
                 {
                     table.PrimaryKey("packages_pkey", x => x.id);
                 });
-
-            migrationBuilder.CreateTable(
-                name: "user_profiles",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    user_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    full_name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    avatar_url = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    bio = table.Column<string>(type: "text", nullable: true),
-                    preferred_travel_styles = table.Column<List<string>>(type: "text[]", nullable: true),
-                    interests = table.Column<List<string>>(type: "text[]", nullable: true),
-                    accessibility_needs = table.Column<string>(type: "text", nullable: true),
-                    department = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    permissions = table.Column<string>(type: "jsonb", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("user_profiles_pkey", x => x.id);
-                    table.UniqueConstraint("AK_user_profiles_user_id", x => x.user_id);
-                },
-                comment: "Metadata chi tiết cho từng loại user");
 
             migrationBuilder.CreateTable(
                 name: "users",
@@ -137,13 +97,7 @@ namespace JSEA_Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("users_pkey", x => x.id);
-                    table.ForeignKey(
-                        name: "users_id_fkey",
-                        column: x => x.id,
-                        principalTable: "user_profiles",
-                        principalColumn: "user_id");
-                },
-                comment: "Quản lý authentication và phân quyền");
+                });
 
             migrationBuilder.CreateTable(
                 name: "audit_logs",
@@ -166,39 +120,6 @@ namespace JSEA_Infrastructure.Migrations
                     table.ForeignKey(
                         name: "audit_logs_user_id_fkey",
                         column: x => x.user_id,
-                        principalTable: "users",
-                        principalColumn: "id");
-                });
-
-            migrationBuilder.CreateTable(
-                name: "experience_details",
-                columns: table => new
-                {
-                    experience_id = table.Column<Guid>(type: "uuid", nullable: false),
-                    description = table.Column<string>(type: "text", nullable: true),
-                    opening_hours = table.Column<string>(type: "jsonb", nullable: true),
-                    price_range = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    crowd_level = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
-                    safety_notes = table.Column<string>(type: "text", nullable: true),
-                    accessibility_info = table.Column<string>(type: "text", nullable: true),
-                    moderation_notes = table.Column<string>(type: "text", nullable: true),
-                    rejection_reason = table.Column<string>(type: "text", nullable: true),
-                    verified_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    verified_by_user_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    featured_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    featured_by_user_id = table.Column<Guid>(type: "uuid", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("experience_details_pkey", x => x.experience_id);
-                    table.ForeignKey(
-                        name: "experience_details_featured_by_user_id_fkey",
-                        column: x => x.featured_by_user_id,
-                        principalTable: "users",
-                        principalColumn: "id");
-                    table.ForeignKey(
-                        name: "experience_details_verified_by_user_id_fkey",
-                        column: x => x.verified_by_user_id,
                         principalTable: "users",
                         principalColumn: "id");
                 });
@@ -240,6 +161,43 @@ namespace JSEA_Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "micro_experiences",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    uploaded_by_user_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    category_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    slug = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    location = table.Column<Point>(type: "geography(Point,4326)", nullable: true),
+                    address = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    city = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    country = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, defaultValue: "Vietnam"),
+                    tags = table.Column<List<string>>(type: "text[]", nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()"),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    status = table.Column<int>(type: "integer", nullable: false),
+                    suitable_moods = table.Column<int[]>(type: "integer[]", nullable: false),
+                    preferred_times = table.Column<int[]>(type: "integer[]", nullable: false),
+                    weather_suitability = table.Column<int[]>(type: "integer[]", nullable: false),
+                    seasonality = table.Column<int[]>(type: "integer[]", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("micro_experiences_pkey", x => x.id);
+                    table.ForeignKey(
+                        name: "micro_experiences_category_id_fkey",
+                        column: x => x.category_id,
+                        principalTable: "categories",
+                        principalColumn: "id");
+                    table.ForeignKey(
+                        name: "micro_experiences_uploaded_by_user_id_fkey",
+                        column: x => x.uploaded_by_user_id,
+                        principalTable: "users",
+                        principalColumn: "id");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "refresh_tokens",
                 columns: table => new
                 {
@@ -257,7 +215,8 @@ namespace JSEA_Infrastructure.Migrations
                         name: "refresh_tokens_user_id_fkey",
                         column: x => x.user_id,
                         principalTable: "users",
-                        principalColumn: "id");
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -293,7 +252,7 @@ namespace JSEA_Infrastructure.Migrations
                     checkout_url = table.Column<string>(type: "text", nullable: true),
                     webhook_data = table.Column<string>(type: "jsonb", nullable: true),
                     paid_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    item_snapshot = table.Column<string>(type: "jsonb", nullable: true, comment: "Lưu thông tin gói tại thời điểm mua"),
+                    item_snapshot = table.Column<string>(type: "jsonb", nullable: true),
                     payment_method = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: true),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()"),
                     type = table.Column<int>(type: "integer", nullable: false),
@@ -336,52 +295,29 @@ namespace JSEA_Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "micro_experiences",
+                name: "user_profiles",
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    uploaded_by_user_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    category_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    slug = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
-                    location = table.Column<Point>(type: "geography(Point,4326)", nullable: true),
-                    address = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    city = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    country = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, defaultValueSql: "'Vietnam'::character varying"),
-                    tags = table.Column<List<string>>(type: "text[]", nullable: true),
-                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()"),
-                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    status = table.Column<int>(type: "integer", nullable: false),
-                    suitable_moods = table.Column<int[]>(type: "integer[]", nullable: false),
-                    preferred_times = table.Column<int[]>(type: "integer[]", nullable: false),
-                    weather_suitability = table.Column<int[]>(type: "integer[]", nullable: false),
-                    seasonality = table.Column<int[]>(type: "integer[]", nullable: false)
+                    user_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    full_name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
+                    avatar_url = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    bio = table.Column<string>(type: "text", nullable: true),
+                    preferred_travel_styles = table.Column<List<string>>(type: "text[]", nullable: true),
+                    interests = table.Column<List<string>>(type: "text[]", nullable: true),
+                    accessibility_needs = table.Column<string>(type: "text", nullable: true),
+                    department = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
+                    permissions = table.Column<string>(type: "jsonb", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("micro_experiences_pkey", x => x.id);
+                    table.PrimaryKey("user_profiles_pkey", x => x.id);
                     table.ForeignKey(
-                        name: "micro_experiences_category_id_fkey",
-                        column: x => x.category_id,
-                        principalTable: "categories",
-                        principalColumn: "id");
-                    table.ForeignKey(
-                        name: "micro_experiences_id_fkey",
-                        column: x => x.id,
-                        principalTable: "experience_metrics",
-                        principalColumn: "experience_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "micro_experiences_id_fkey1",
-                        column: x => x.id,
-                        principalTable: "experience_details",
-                        principalColumn: "experience_id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "micro_experiences_uploaded_by_user_id_fkey",
-                        column: x => x.uploaded_by_user_id,
+                        name: "user_profiles_user_id_fkey",
+                        column: x => x.user_id,
                         principalTable: "users",
-                        principalColumn: "id");
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -441,6 +377,69 @@ namespace JSEA_Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "experience_details",
+                columns: table => new
+                {
+                    experience_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    description = table.Column<string>(type: "text", nullable: true),
+                    opening_hours = table.Column<string>(type: "jsonb", nullable: true),
+                    price_range = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    crowd_level = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
+                    safety_notes = table.Column<string>(type: "text", nullable: true),
+                    accessibility_info = table.Column<string>(type: "text", nullable: true),
+                    moderation_notes = table.Column<string>(type: "text", nullable: true),
+                    rejection_reason = table.Column<string>(type: "text", nullable: true),
+                    verified_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    verified_by_user_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    featured_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    featured_by_user_id = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("experience_details_pkey", x => x.experience_id);
+                    table.ForeignKey(
+                        name: "experience_details_experience_id_fkey",
+                        column: x => x.experience_id,
+                        principalTable: "micro_experiences",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "experience_details_featured_by_user_id_fkey",
+                        column: x => x.featured_by_user_id,
+                        principalTable: "users",
+                        principalColumn: "id");
+                    table.ForeignKey(
+                        name: "experience_details_verified_by_user_id_fkey",
+                        column: x => x.verified_by_user_id,
+                        principalTable: "users",
+                        principalColumn: "id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "experience_metrics",
+                columns: table => new
+                {
+                    experience_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    featured_score = table.Column<decimal>(type: "numeric(3,2)", precision: 3, scale: 2, nullable: true),
+                    total_visits = table.Column<int>(type: "integer", nullable: true, defaultValue: 0),
+                    total_ratings = table.Column<int>(type: "integer", nullable: true, defaultValue: 0),
+                    avg_rating = table.Column<decimal>(type: "numeric(2,1)", precision: 2, scale: 1, nullable: true, defaultValue: 0m),
+                    acceptance_rate = table.Column<decimal>(type: "numeric(3,2)", precision: 3, scale: 2, nullable: true),
+                    last_visit_date = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("experience_metrics_pkey", x => x.experience_id);
+                    table.ForeignKey(
+                        name: "experience_metrics_experience_id_fkey",
+                        column: x => x.experience_id,
+                        principalTable: "micro_experiences",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "experience_photos",
                 columns: table => new
                 {
@@ -475,10 +474,10 @@ namespace JSEA_Infrastructure.Migrations
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
                     journey_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    experience_id = table.Column<Guid>(type: "uuid", nullable: true, comment: "Có thể là 1 micro-experience hoặc điểm tùy chỉnh"),
+                    experience_id = table.Column<Guid>(type: "uuid", nullable: true),
                     location = table.Column<Point>(type: "geography(Point,4326)", nullable: true),
                     address = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    stop_order = table.Column<int>(type: "integer", nullable: true, comment: "Thứ tự điểm dừng 1, 2, 3..."),
+                    stop_order = table.Column<int>(type: "integer", nullable: true),
                     estimated_arrival_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     actual_arrival_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
@@ -558,6 +557,38 @@ namespace JSEA_Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "visits",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    traveler_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    experience_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    journey_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    visited_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()"),
+                    actual_duration_minutes = table.Column<int>(type: "integer", nullable: true),
+                    photo_urls = table.Column<List<string>>(type: "text[]", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("visits_pkey", x => x.id);
+                    table.ForeignKey(
+                        name: "visits_experience_id_fkey",
+                        column: x => x.experience_id,
+                        principalTable: "micro_experiences",
+                        principalColumn: "id");
+                    table.ForeignKey(
+                        name: "visits_journey_id_fkey",
+                        column: x => x.journey_id,
+                        principalTable: "journeys",
+                        principalColumn: "id");
+                    table.ForeignKey(
+                        name: "visits_traveler_id_fkey",
+                        column: x => x.traveler_id,
+                        principalTable: "users",
+                        principalColumn: "id");
+                });
+
+            migrationBuilder.CreateTable(
                 name: "journey_suggestions",
                 columns: table => new
                 {
@@ -611,25 +642,6 @@ namespace JSEA_Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "suggestion_interactions",
-                columns: table => new
-                {
-                    id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    suggestion_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    interacted_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()"),
-                    interaction_type = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("suggestion_interactions_pkey", x => x.id);
-                    table.ForeignKey(
-                        name: "suggestion_interactions_suggestion_id_fkey",
-                        column: x => x.suggestion_id,
-                        principalTable: "journey_suggestions",
-                        principalColumn: "id");
-                });
-
-            migrationBuilder.CreateTable(
                 name: "feedbacks",
                 columns: table => new
                 {
@@ -656,6 +668,12 @@ namespace JSEA_Infrastructure.Migrations
                         column: x => x.traveler_id,
                         principalTable: "users",
                         principalColumn: "id");
+                    table.ForeignKey(
+                        name: "feedbacks_visit_id_fkey",
+                        column: x => x.visit_id,
+                        principalTable: "visits",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -666,7 +684,7 @@ namespace JSEA_Infrastructure.Migrations
                     visit_id = table.Column<Guid>(type: "uuid", nullable: false),
                     traveler_id = table.Column<Guid>(type: "uuid", nullable: true),
                     experience_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    rating = table.Column<int>(type: "integer", nullable: true, comment: "1-5 stars"),
+                    rating = table.Column<int>(type: "integer", nullable: true),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()")
                 },
                 constraints: table =>
@@ -682,49 +700,30 @@ namespace JSEA_Infrastructure.Migrations
                         column: x => x.traveler_id,
                         principalTable: "users",
                         principalColumn: "id");
+                    table.ForeignKey(
+                        name: "ratings_visit_id_fkey",
+                        column: x => x.visit_id,
+                        principalTable: "visits",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
-                name: "visits",
+                name: "suggestion_interactions",
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    traveler_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    experience_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    journey_id = table.Column<Guid>(type: "uuid", nullable: true),
-                    visited_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()"),
-                    actual_duration_minutes = table.Column<int>(type: "integer", nullable: true),
-                    photo_urls = table.Column<List<string>>(type: "text[]", nullable: true)
+                    suggestion_id = table.Column<Guid>(type: "uuid", nullable: true),
+                    interacted_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()"),
+                    interaction_type = table.Column<int>(type: "integer", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("visits_pkey", x => x.id);
+                    table.PrimaryKey("suggestion_interactions_pkey", x => x.id);
                     table.ForeignKey(
-                        name: "FK_visits_feedbacks_id",
-                        column: x => x.id,
-                        principalTable: "feedbacks",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_visits_ratings_id",
-                        column: x => x.id,
-                        principalTable: "ratings",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "visits_experience_id_fkey",
-                        column: x => x.experience_id,
-                        principalTable: "micro_experiences",
-                        principalColumn: "id");
-                    table.ForeignKey(
-                        name: "visits_journey_id_fkey",
-                        column: x => x.journey_id,
-                        principalTable: "journeys",
-                        principalColumn: "id");
-                    table.ForeignKey(
-                        name: "visits_traveler_id_fkey",
-                        column: x => x.traveler_id,
-                        principalTable: "users",
+                        name: "suggestion_interactions_suggestion_id_fkey",
+                        column: x => x.suggestion_id,
+                        principalTable: "journey_suggestions",
                         principalColumn: "id");
                 });
 
@@ -911,12 +910,6 @@ namespace JSEA_Infrastructure.Migrations
                 column: "user_id");
 
             migrationBuilder.CreateIndex(
-                name: "transactions_order_code_key",
-                table: "transactions",
-                column: "order_code",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_user_favorites_experience_id",
                 table: "user_favorites",
                 column: "experience_id");
@@ -968,73 +961,11 @@ namespace JSEA_Infrastructure.Migrations
                 name: "IX_visits_traveler_id",
                 table: "visits",
                 column: "traveler_id");
-
-            migrationBuilder.AddForeignKey(
-                name: "feedbacks_visit_id_fkey",
-                table: "feedbacks",
-                column: "visit_id",
-                principalTable: "visits",
-                principalColumn: "id");
-
-            migrationBuilder.AddForeignKey(
-                name: "ratings_visit_id_fkey",
-                table: "ratings",
-                column: "visit_id",
-                principalTable: "visits",
-                principalColumn: "id");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "experience_details_featured_by_user_id_fkey",
-                table: "experience_details");
-
-            migrationBuilder.DropForeignKey(
-                name: "experience_details_verified_by_user_id_fkey",
-                table: "experience_details");
-
-            migrationBuilder.DropForeignKey(
-                name: "feedbacks_traveler_id_fkey",
-                table: "feedbacks");
-
-            migrationBuilder.DropForeignKey(
-                name: "journeys_traveler_id_fkey",
-                table: "journeys");
-
-            migrationBuilder.DropForeignKey(
-                name: "micro_experiences_uploaded_by_user_id_fkey",
-                table: "micro_experiences");
-
-            migrationBuilder.DropForeignKey(
-                name: "ratings_traveler_id_fkey",
-                table: "ratings");
-
-            migrationBuilder.DropForeignKey(
-                name: "visits_traveler_id_fkey",
-                table: "visits");
-
-            migrationBuilder.DropForeignKey(
-                name: "feedbacks_experience_id_fkey",
-                table: "feedbacks");
-
-            migrationBuilder.DropForeignKey(
-                name: "ratings_experience_id_fkey",
-                table: "ratings");
-
-            migrationBuilder.DropForeignKey(
-                name: "visits_experience_id_fkey",
-                table: "visits");
-
-            migrationBuilder.DropForeignKey(
-                name: "feedbacks_visit_id_fkey",
-                table: "feedbacks");
-
-            migrationBuilder.DropForeignKey(
-                name: "ratings_visit_id_fkey",
-                table: "ratings");
-
             migrationBuilder.DropTable(
                 name: "audit_logs");
 
@@ -1042,13 +973,25 @@ namespace JSEA_Infrastructure.Migrations
                 name: "event_occurrences");
 
             migrationBuilder.DropTable(
+                name: "experience_details");
+
+            migrationBuilder.DropTable(
+                name: "experience_metrics");
+
+            migrationBuilder.DropTable(
                 name: "experience_photos");
+
+            migrationBuilder.DropTable(
+                name: "feedbacks");
 
             migrationBuilder.DropTable(
                 name: "journey_waypoints");
 
             migrationBuilder.DropTable(
                 name: "notifications");
+
+            migrationBuilder.DropTable(
+                name: "ratings");
 
             migrationBuilder.DropTable(
                 name: "refresh_tokens");
@@ -1069,7 +1012,13 @@ namespace JSEA_Infrastructure.Migrations
                 name: "user_packages");
 
             migrationBuilder.DropTable(
+                name: "user_profiles");
+
+            migrationBuilder.DropTable(
                 name: "events");
+
+            migrationBuilder.DropTable(
+                name: "visits");
 
             migrationBuilder.DropTable(
                 name: "journey_suggestions");
@@ -1078,37 +1027,19 @@ namespace JSEA_Infrastructure.Migrations
                 name: "packages");
 
             migrationBuilder.DropTable(
-                name: "route_segments");
-
-            migrationBuilder.DropTable(
-                name: "users");
-
-            migrationBuilder.DropTable(
-                name: "user_profiles");
-
-            migrationBuilder.DropTable(
                 name: "micro_experiences");
+
+            migrationBuilder.DropTable(
+                name: "route_segments");
 
             migrationBuilder.DropTable(
                 name: "categories");
 
             migrationBuilder.DropTable(
-                name: "experience_metrics");
-
-            migrationBuilder.DropTable(
-                name: "experience_details");
-
-            migrationBuilder.DropTable(
-                name: "visits");
-
-            migrationBuilder.DropTable(
-                name: "feedbacks");
-
-            migrationBuilder.DropTable(
-                name: "ratings");
-
-            migrationBuilder.DropTable(
                 name: "journeys");
+
+            migrationBuilder.DropTable(
+                name: "users");
         }
     }
 }
