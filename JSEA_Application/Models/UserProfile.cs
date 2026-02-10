@@ -47,6 +47,7 @@ public partial class UserProfile
     [Column("permissions", TypeName = "jsonb")]
     public string? Permissions { get; set; }
 
-    [InverseProperty("IdNavigation")]
+    [ForeignKey("UserId")]
+    [InverseProperty("Profile")]
     public virtual User? User { get; set; }
 }

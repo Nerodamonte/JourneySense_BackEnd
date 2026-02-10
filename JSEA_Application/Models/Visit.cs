@@ -35,14 +35,6 @@ public partial class Visit
     [InverseProperty("Visits")]
     public virtual MicroExperience? Experience { get; set; }
 
-    [ForeignKey("Id")]
-    [InverseProperty("Visit")]
-    public virtual Rating Id1 { get; set; } = null!;
-
-    [ForeignKey("Id")]
-    [InverseProperty("Visit")]
-    public virtual Feedback IdNavigation { get; set; } = null!;
-
     [ForeignKey("JourneyId")]
     [InverseProperty("Visits")]
     public virtual Journey? Journey { get; set; }
@@ -50,6 +42,11 @@ public partial class Visit
     [ForeignKey("TravelerId")]
     [InverseProperty("Visits")]
     public virtual User? Traveler { get; set; }
+
+ 
+    [InverseProperty("Visit")]
     public virtual Rating? Rating { get; set; }
+
+    [InverseProperty("Visit")]
     public virtual Feedback? Feedback { get; set; }
 }

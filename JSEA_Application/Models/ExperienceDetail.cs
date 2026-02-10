@@ -55,7 +55,9 @@ public partial class ExperienceDetail
     [InverseProperty("ExperienceDetailFeaturedByUsers")]
     public virtual User? FeaturedByUser { get; set; }
 
-    [InverseProperty("IdNavigation")]
+   
+    [ForeignKey("ExperienceId")]
+    [InverseProperty("Details")]
     public virtual MicroExperience? MicroExperience { get; set; }
 
     [ForeignKey("VerifiedByUserId")]

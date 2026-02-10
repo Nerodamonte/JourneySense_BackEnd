@@ -7,9 +7,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace JSEA_Application.Models;
 
-/// <summary>
-/// Quản lý authentication và phân quyền
-/// </summary>
 [Table("users")]
 [Index("Email", Name = "users_email_key", IsUnique = true)]
 [Index("Phone", Name = "users_phone_key", IsUnique = true)]
@@ -39,16 +36,14 @@ public partial class User
 
     [Column("auth_provider")]
     [StringLength(50)]
-    public string? AuthProvider { get; set; } 
+    public string? AuthProvider { get; set; }
 
     [Column("provider_key")]
     [StringLength(255)]
-    public string? ProviderKey { get; set; } 
+    public string? ProviderKey { get; set; }
 
-    
     [Column("access_failed_count")]
     public int AccessFailedCount { get; set; } = 0;
-
 
     [Column("email_verified")]
     public bool? EmailVerified { get; set; }
@@ -75,6 +70,9 @@ public partial class User
     public UserStatus Status { get; set; }
 
     [InverseProperty("User")]
+    public virtual UserProfile? Profile { get; set; }
+
+    [InverseProperty("User")]
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
     [InverseProperty("UploadedByUser")]
@@ -91,10 +89,6 @@ public partial class User
 
     [InverseProperty("Traveler")]
     public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
-
-    [ForeignKey("Id")]
-    [InverseProperty("User")]
-    public virtual UserProfile IdNavigation { get; set; } = null!;
 
     [InverseProperty("Traveler")]
     public virtual ICollection<Journey> Journeys { get; set; } = new List<Journey>();
@@ -125,6 +119,4 @@ public partial class User
 
     [InverseProperty("Traveler")]
     public virtual ICollection<Visit> Visits { get; set; } = new List<Visit>();
-
-    
 }

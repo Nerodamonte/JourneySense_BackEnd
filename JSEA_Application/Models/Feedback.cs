@@ -47,6 +47,8 @@ public partial class Feedback
     [InverseProperty("Feedbacks")]
     public virtual User? Traveler { get; set; }
 
-    [InverseProperty("IdNavigation")]
+    
+    [ForeignKey("VisitId")]
+    [InverseProperty("Feedback")]
     public virtual Visit? Visit { get; set; }
 }

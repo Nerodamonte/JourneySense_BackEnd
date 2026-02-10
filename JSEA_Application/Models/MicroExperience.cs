@@ -58,6 +58,12 @@ public partial class MicroExperience
     [InverseProperty("MicroExperiences")]
     public virtual Category? Category { get; set; }
 
+    [InverseProperty("MicroExperience")]
+    public virtual ExperienceMetric? Metrics { get; set; }
+
+    [InverseProperty("MicroExperience")]
+    public virtual ExperienceDetail? Details { get; set; }
+
     [InverseProperty("Experience")]
     public virtual ICollection<Event> Events { get; set; } = new List<Event>();
 
@@ -66,14 +72,6 @@ public partial class MicroExperience
 
     [InverseProperty("Experience")]
     public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
-
-    [ForeignKey("Id")]
-    [InverseProperty("MicroExperience")]
-    public virtual ExperienceMetric Id1 { get; set; } = null!;
-
-    [ForeignKey("Id")]
-    [InverseProperty("MicroExperience")]
-    public virtual ExperienceDetail IdNavigation { get; set; } = null!;
 
     [InverseProperty("Experience")]
     public virtual ICollection<JourneySuggestion> JourneySuggestions { get; set; } = new List<JourneySuggestion>();

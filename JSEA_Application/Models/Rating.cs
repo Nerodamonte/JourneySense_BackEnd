@@ -24,9 +24,6 @@ public partial class Rating
     [Column("experience_id")]
     public Guid? ExperienceId { get; set; }
 
-    /// <summary>
-    /// 1-5 stars
-    /// </summary>
     [Column("rating")]
     public int? Rating1 { get; set; }
 
@@ -41,6 +38,8 @@ public partial class Rating
     [InverseProperty("Ratings")]
     public virtual User? Traveler { get; set; }
 
-    [InverseProperty("Id1")]
+
+    [ForeignKey("VisitId")]
+    [InverseProperty("Rating")]
     public virtual Visit? Visit { get; set; }
 }

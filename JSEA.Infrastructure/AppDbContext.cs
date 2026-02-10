@@ -45,6 +45,11 @@ public partial class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // 1. POSTGRES ENUMS & EXTENSIONS
+        modelBuilder.HasPostgresExtension("postgis");
+        modelBuilder.HasPostgresExtension("fuzzystrmatch");
+        modelBuilder.HasPostgresExtension("pg_trgm");
+
         modelBuilder.HasPostgresEnum<ActionType>("action_type");
         modelBuilder.HasPostgresEnum<ExperienceStatus>("experience_status");
         modelBuilder.HasPostgresEnum<InteractionType>("interaction_type");
@@ -62,12 +67,7 @@ public partial class AppDbContext : DbContext
         modelBuilder.HasPostgresEnum<VehicleType>("vehicle_type");
         modelBuilder.HasPostgresEnum<WeatherType>("weather_type");
 
-        // Đăng ký Extension PostGIS
-        modelBuilder.HasPostgresExtension("postgis");
-        modelBuilder.HasPostgresExtension("fuzzystrmatch");
-        modelBuilder.HasPostgresExtension("pg_trgm");
-
-        // CONFIG CÁC ENTITY
+        // 2. CHI TIẾT CẤU HÌNH TỪNG THỰC THỂ
 
         modelBuilder.Entity<AuditLog>(entity =>
         {
@@ -99,22 +99,35 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Event).WithMany(p => p.EventOccurrences).HasConstraintName("event_occurrences_event_id_fkey");
         });
 
+ 
         modelBuilder.Entity<ExperienceDetail>(entity =>
         {
             entity.HasKey(e => e.ExperienceId).HasName("experience_details_pkey");
             entity.Property(e => e.ExperienceId).ValueGeneratedNever();
+
+            entity.HasOne(d => d.MicroExperience)
+                .WithOne(p => p.Details) // Đổi từ IdNavigation sang Details
+                .HasForeignKey<ExperienceDetail>(d => d.ExperienceId)
+                .HasConstraintName("experience_details_experience_id_fkey");
+
             entity.HasOne(d => d.FeaturedByUser).WithMany(p => p.ExperienceDetailFeaturedByUsers).HasConstraintName("experience_details_featured_by_user_id_fkey");
             entity.HasOne(d => d.VerifiedByUser).WithMany(p => p.ExperienceDetailVerifiedByUsers).HasConstraintName("experience_details_verified_by_user_id_fkey");
         });
 
+       
         modelBuilder.Entity<ExperienceMetric>(entity =>
         {
             entity.HasKey(e => e.ExperienceId).HasName("experience_metrics_pkey");
             entity.Property(e => e.ExperienceId).ValueGeneratedNever();
-            entity.Property(e => e.AvgRating).HasDefaultValueSql("0");
+            entity.Property(e => e.AvgRating).HasDefaultValue(0m);
             entity.Property(e => e.TotalRatings).HasDefaultValue(0);
             entity.Property(e => e.TotalVisits).HasDefaultValue(0);
             entity.Property(e => e.UpdatedAt).HasDefaultValueSql("now()");
+
+            entity.HasOne(d => d.MicroExperience)
+                .WithOne(p => p.Metrics) // Đổi từ Id1 sang Metrics
+                .HasForeignKey<ExperienceMetric>(d => d.ExperienceId)
+                .HasConstraintName("experience_metrics_experience_id_fkey");
         });
 
         modelBuilder.Entity<ExperiencePhoto>(entity =>
@@ -133,14 +146,15 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.IsApproved).HasDefaultValue(true);
             entity.Property(e => e.IsFlagged).HasDefaultValue(false);
-            entity.HasOne(d => d.Experience).WithMany(p => p.Feedbacks).HasConstraintName("feedbacks_experience_id_fkey");
-            entity.HasOne(d => d.Traveler).WithMany(p => p.Feedbacks).HasConstraintName("feedbacks_traveler_id_fkey");
 
             entity.HasOne(d => d.Visit)
                   .WithOne(p => p.Feedback)
                   .HasForeignKey<Feedback>(d => d.VisitId)
-                  .IsRequired(false)
+                  .OnDelete(DeleteBehavior.SetNull)
                   .HasConstraintName("feedbacks_visit_id_fkey");
+
+            entity.HasOne(d => d.Experience).WithMany(p => p.Feedbacks).HasConstraintName("feedbacks_experience_id_fkey");
+            entity.HasOne(d => d.Traveler).WithMany(p => p.Feedbacks).HasConstraintName("feedbacks_traveler_id_fkey");
         });
 
         modelBuilder.Entity<Journey>(entity =>
@@ -165,8 +179,6 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("journey_waypoints_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
-            entity.Property(e => e.ExperienceId).HasComment("Có thể là 1 micro-experience hoặc điểm tùy chỉnh");
-            entity.Property(e => e.StopOrder).HasComment("Thứ tự điểm dừng 1, 2, 3...");
             entity.HasOne(d => d.Experience).WithMany(p => p.JourneyWaypoints).HasConstraintName("journey_waypoints_experience_id_fkey");
             entity.HasOne(d => d.Journey).WithMany(p => p.JourneyWaypoints).OnDelete(DeleteBehavior.Cascade).HasConstraintName("journey_waypoints_journey_id_fkey");
         });
@@ -175,13 +187,9 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("micro_experiences_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
-            entity.Property(e => e.Country).HasDefaultValueSql("'Vietnam'::character varying");
+            entity.Property(e => e.Country).HasDefaultValue("Vietnam");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.HasOne(d => d.Category).WithMany(p => p.MicroExperiences).HasConstraintName("micro_experiences_category_id_fkey");
-
-            entity.HasOne(d => d.IdNavigation).WithOne(p => p.MicroExperience).HasConstraintName("micro_experiences_id_fkey1");
-            entity.HasOne(d => d.Id1).WithOne(p => p.MicroExperience).HasConstraintName("micro_experiences_id_fkey");
-
             entity.HasOne(d => d.UploadedByUser).WithMany(p => p.MicroExperiences).HasConstraintName("micro_experiences_uploaded_by_user_id_fkey");
         });
 
@@ -200,27 +208,26 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("packages_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
-            entity.Property(e => e.Benefit).HasComment("Lưu các quyền lợi của gói");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.IsPopular).HasDefaultValue(false);
-            entity.Property(e => e.Km).HasComment("Giới hạn km hoặc thuộc tính liên quan");
         });
 
+        // SỬA QUAN HỆ 1-1: Visit -> Rating
         modelBuilder.Entity<Rating>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("ratings_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-            entity.Property(e => e.Rating1).HasComment("1-5 stars");
-            entity.HasOne(d => d.Experience).WithMany(p => p.Ratings).HasConstraintName("ratings_experience_id_fkey");
-            entity.HasOne(d => d.Traveler).WithMany(p => p.Ratings).HasConstraintName("ratings_traveler_id_fkey");
 
             entity.HasOne(d => d.Visit)
                   .WithOne(p => p.Rating)
                   .HasForeignKey<Rating>(d => d.VisitId)
-                  .IsRequired(false)
+                  .OnDelete(DeleteBehavior.SetNull)
                   .HasConstraintName("ratings_visit_id_fkey");
+
+            entity.HasOne(d => d.Experience).WithMany(p => p.Ratings).HasConstraintName("ratings_experience_id_fkey");
+            entity.HasOne(d => d.Traveler).WithMany(p => p.Ratings).HasConstraintName("ratings_traveler_id_fkey");
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>
@@ -228,7 +235,7 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("refresh_tokens_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-            entity.HasOne(d => d.User).WithMany(p => p.RefreshTokens).OnDelete(DeleteBehavior.ClientSetNull).HasConstraintName("refresh_tokens_user_id_fkey");
+            entity.HasOne(d => d.User).WithMany(p => p.RefreshTokens).OnDelete(DeleteBehavior.Cascade).HasConstraintName("refresh_tokens_user_id_fkey");
         });
 
         modelBuilder.Entity<RouteSegment>(entity =>
@@ -253,40 +260,28 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.UpdatedByUser).WithMany(p => p.SystemConfigs).HasConstraintName("system_configs_updated_by_user_id_fkey");
         });
 
-    
         modelBuilder.Entity<Transaction>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("transactions_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-
-          
-            entity.HasIndex(e => e.OrderCode)
-                  .IsUnique()
-                  .HasDatabaseName("transactions_order_code_key");
-
-        
-            entity.Property(e => e.WebhookData).HasColumnType("jsonb");
-            entity.Property(e => e.ItemSnapshot).HasColumnType("jsonb").HasComment("Lưu thông tin gói tại thời điểm mua");
-
             entity.HasOne(d => d.User).WithMany(p => p.Transactions).HasConstraintName("transactions_user_id_fkey");
         });
-      
 
         modelBuilder.Entity<User>(entity =>
         {
-            entity.ToTable("users", tb => tb.HasComment("Quản lý authentication và phân quyền"));
             entity.HasKey(e => e.Id).HasName("users_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.EmailVerified).HasDefaultValue(false);
             entity.Property(e => e.PhoneVerified).HasDefaultValue(false);
 
-            entity.HasOne(d => d.IdNavigation).WithOne(p => p.User)
-                .HasPrincipalKey<UserProfile>(p => p.UserId)
-                .HasForeignKey<User>(d => d.Id)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("users_id_fkey");
+            // SỬA QUAN HỆ 1-1: User -> UserProfile
+            entity.HasOne(d => d.Profile)
+                .WithOne(p => p.User)
+                .HasForeignKey<UserProfile>(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("user_profiles_user_id_fkey");
         });
 
         modelBuilder.Entity<UserFavorite>(entity =>
@@ -310,7 +305,6 @@ public partial class AppDbContext : DbContext
 
         modelBuilder.Entity<UserProfile>(entity =>
         {
-            entity.ToTable("user_profiles", tb => tb.HasComment("Metadata chi tiết cho từng loại user"));
             entity.HasKey(e => e.Id).HasName("user_profiles_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
         });
