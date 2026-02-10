@@ -17,7 +17,6 @@ public partial class AppDbContext : DbContext
     {
     }
 
-   
     public virtual DbSet<AuditLog> AuditLogs { get; set; }
     public virtual DbSet<Category> Categories { get; set; }
     public virtual DbSet<Event> Events { get; set; }
@@ -46,7 +45,6 @@ public partial class AppDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        
         modelBuilder.HasPostgresEnum<ActionType>("action_type");
         modelBuilder.HasPostgresEnum<ExperienceStatus>("experience_status");
         modelBuilder.HasPostgresEnum<InteractionType>("interaction_type");
@@ -66,11 +64,10 @@ public partial class AppDbContext : DbContext
 
         // Đăng ký Extension PostGIS
         modelBuilder.HasPostgresExtension("postgis");
-        // Các extension khác
         modelBuilder.HasPostgresExtension("fuzzystrmatch");
         modelBuilder.HasPostgresExtension("pg_trgm");
 
-        // 2. CONFIG CÁC ENTITY
+        // CONFIG CÁC ENTITY
 
         modelBuilder.Entity<AuditLog>(entity =>
         {
@@ -139,11 +136,10 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Experience).WithMany(p => p.Feedbacks).HasConstraintName("feedbacks_experience_id_fkey");
             entity.HasOne(d => d.Traveler).WithMany(p => p.Feedbacks).HasConstraintName("feedbacks_traveler_id_fkey");
 
-            // Sửa lại quan hệ 1-1 với Visit
             entity.HasOne(d => d.Visit)
                   .WithOne(p => p.Feedback)
-                  .HasForeignKey<Feedback>(d => d.VisitId) // Feedback cầm khóa ngoại
-                  .IsRequired(false) // Có thể null
+                  .HasForeignKey<Feedback>(d => d.VisitId)
+                  .IsRequired(false)
                   .HasConstraintName("feedbacks_visit_id_fkey");
         });
 
@@ -183,7 +179,6 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.HasOne(d => d.Category).WithMany(p => p.MicroExperiences).HasConstraintName("micro_experiences_category_id_fkey");
 
-            // Lưu ý: Các quan hệ tự tham chiếu (Self-referencing) đôi khi gây rối, hãy kiểm tra kỹ logic Id1/IdNavigation trong Model
             entity.HasOne(d => d.IdNavigation).WithOne(p => p.MicroExperience).HasConstraintName("micro_experiences_id_fkey1");
             entity.HasOne(d => d.Id1).WithOne(p => p.MicroExperience).HasConstraintName("micro_experiences_id_fkey");
 
@@ -221,10 +216,9 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Experience).WithMany(p => p.Ratings).HasConstraintName("ratings_experience_id_fkey");
             entity.HasOne(d => d.Traveler).WithMany(p => p.Ratings).HasConstraintName("ratings_traveler_id_fkey");
 
-            // Sửa lại quan hệ 1-1 với Visit
             entity.HasOne(d => d.Visit)
                   .WithOne(p => p.Rating)
-                  .HasForeignKey<Rating>(d => d.VisitId) // Rating cầm khóa ngoại
+                  .HasForeignKey<Rating>(d => d.VisitId)
                   .IsRequired(false)
                   .HasConstraintName("ratings_visit_id_fkey");
         });
@@ -259,14 +253,25 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.UpdatedByUser).WithMany(p => p.SystemConfigs).HasConstraintName("system_configs_updated_by_user_id_fkey");
         });
 
+    
         modelBuilder.Entity<Transaction>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("transactions_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
-            entity.Property(e => e.ItemSnapshot).HasComment("Lưu thông tin gói tại thời điểm mua");
+
+          
+            entity.HasIndex(e => e.OrderCode)
+                  .IsUnique()
+                  .HasDatabaseName("transactions_order_code_key");
+
+        
+            entity.Property(e => e.WebhookData).HasColumnType("jsonb");
+            entity.Property(e => e.ItemSnapshot).HasColumnType("jsonb").HasComment("Lưu thông tin gói tại thời điểm mua");
+
             entity.HasOne(d => d.User).WithMany(p => p.Transactions).HasConstraintName("transactions_user_id_fkey");
         });
+      
 
         modelBuilder.Entity<User>(entity =>
         {
@@ -277,10 +282,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.EmailVerified).HasDefaultValue(false);
             entity.Property(e => e.PhoneVerified).HasDefaultValue(false);
 
-            // Quan hệ 1-1 với UserProfile
             entity.HasOne(d => d.IdNavigation).WithOne(p => p.User)
                 .HasPrincipalKey<UserProfile>(p => p.UserId)
-                .HasForeignKey<User>(d => d.Id) // Cần kiểm tra kỹ DB xem bảng nào giữ FK, thường UserProfile mới giữ FK UserId
+                .HasForeignKey<User>(d => d.Id)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("users_id_fkey");
         });
@@ -319,8 +323,6 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Experience).WithMany(p => p.Visits).HasConstraintName("visits_experience_id_fkey");
             entity.HasOne(d => d.Journey).WithMany(p => p.Visits).HasConstraintName("visits_journey_id_fkey");
             entity.HasOne(d => d.Traveler).WithMany(p => p.Visits).HasConstraintName("visits_traveler_id_fkey");
-
-            // XÓA BỎ đoạn HasOne(d => d.IdNavigation)... gây lỗi ở đây vì đã cấu hình phía Rating/Feedback rồi
         });
 
         OnModelCreatingPartial(modelBuilder);

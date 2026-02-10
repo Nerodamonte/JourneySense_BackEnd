@@ -31,6 +31,25 @@ public partial class User
     [StringLength(255)]
     public string? PasswordHash { get; set; }
 
+    [Column("reset_password_token")]
+    public string? ResetPasswordToken { get; set; }
+
+    [Column("reset_password_expiry")]
+    public DateTime? ResetPasswordExpiry { get; set; }
+
+    [Column("auth_provider")]
+    [StringLength(50)]
+    public string? AuthProvider { get; set; } 
+
+    [Column("provider_key")]
+    [StringLength(255)]
+    public string? ProviderKey { get; set; } 
+
+    
+    [Column("access_failed_count")]
+    public int AccessFailedCount { get; set; } = 0;
+
+
     [Column("email_verified")]
     public bool? EmailVerified { get; set; }
 
@@ -48,6 +67,12 @@ public partial class User
 
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
+
+    [Column("role")]
+    public UserRole Role { get; set; }
+
+    [Column("status")]
+    public UserStatus Status { get; set; }
 
     [InverseProperty("User")]
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
@@ -101,9 +126,5 @@ public partial class User
     [InverseProperty("Traveler")]
     public virtual ICollection<Visit> Visits { get; set; } = new List<Visit>();
 
-    [Column("role")]
-    public UserRole Role { get; set; }
-
-    [Column("status")]
-    public UserStatus Status { get; set; }
+    
 }
