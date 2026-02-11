@@ -42,6 +42,7 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<UserPackage> UserPackages { get; set; }
     public virtual DbSet<UserProfile> UserProfiles { get; set; }
     public virtual DbSet<Visit> Visits { get; set; }
+    public virtual DbSet<EmailOtp> EmailOtps { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -317,6 +318,22 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Experience).WithMany(p => p.Visits).HasConstraintName("visits_experience_id_fkey");
             entity.HasOne(d => d.Journey).WithMany(p => p.Visits).HasConstraintName("visits_journey_id_fkey");
             entity.HasOne(d => d.Traveler).WithMany(p => p.Visits).HasConstraintName("visits_traveler_id_fkey");
+        });
+
+        modelBuilder.Entity<EmailOtp>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("email_otps_pkey");
+
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+
+            entity.Property(e => e.IsUsed).HasDefaultValue(false);
+
+            entity.Property(e => e.IsVerified).HasDefaultValue(false);
+
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+
+            // Thêm Index cho Email để tìm kiếm OTP nhanh hơn khi verify
+            entity.HasIndex(e => e.Email).HasDatabaseName("idx_email_otps_email");
         });
 
         OnModelCreatingPartial(modelBuilder);
