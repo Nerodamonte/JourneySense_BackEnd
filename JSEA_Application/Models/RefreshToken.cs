@@ -19,13 +19,13 @@ public partial class RefreshToken
 
     [Column("token_hash")]
     [StringLength(255)]
-    public string? TokenHash { get; set; }
+    public string TokenHash { get; set; }
 
     [Column("expires_at")]
-    public DateTime? ExpiresAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
 
     [Column("created_at")]
-    public DateTime? CreatedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 
     [Column("revoked_at")]
     public DateTime? RevokedAt { get; set; }
