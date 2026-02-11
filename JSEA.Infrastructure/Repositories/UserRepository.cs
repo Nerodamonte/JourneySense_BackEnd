@@ -1,5 +1,6 @@
 ﻿using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,16 +18,22 @@ namespace JSEA_Infrastructure.Repositories
             _context = context;
         }
 
-        public User? GetByEmail(string email)
+        public async Task<User?> GetByEmailAsync(string email)
         {
-            return _context.Users
-                .FirstOrDefault(x => x.Email == email);
+            return await _context.Users
+                .FirstOrDefaultAsync(x => x.Email == email);
         }
 
-        public void Update(User user)
+        public async Task CreateAsync(User user)
+        {
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task UpdateAsync(User user)
         {
             _context.Users.Update(user);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
     }
 }

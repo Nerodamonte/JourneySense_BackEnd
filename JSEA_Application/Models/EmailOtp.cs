@@ -1,36 +1,36 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
-namespace JSEA_Application.Models;
-
-[Table("email_otps")]
-public partial class EmailOtp
+namespace JSEA_Application.Models
 {
-    [Key]
-    [Column("id")]
-    public Guid Id { get; set; }
+    [Table("email_otps")]
+    public class EmailOtp
+    {
+        [Key]
+        [Column("id")]
+        public Guid Id { get; set; }
 
-    [Required]
-    [EmailAddress]
-    [Column("email")]
-    [StringLength(255)]
-    public string Email { get; set; } = null!;
+        [Column("email")]
+        public string Email { get; set; } = null!;
 
-    [Required]
-    [Column("otp_code")]
-    [StringLength(6)]
-    public string OtpCode { get; set; } = null!;
+        [Column("otp_code")]
+        public string OtpCode { get; set; } = null!;
 
-    [Column("expired_at")]
-    public DateTime ExpiredAt { get; set; }
+        [Column("expired_at")]
+        public DateTime ExpiredAt { get; set; }
 
-    [Column("is_used")]
-    public bool? IsUsed { get; set; }
+        [Column("is_verified")]
+        public bool IsVerified { get; set; }
 
-    [Column("is_verified")]
-    public bool IsVerified { get; set; }
+        [Column("is_used")]
+        public bool IsUsed { get; set; }
 
-    [Column("created_at")]
-    public DateTime? CreatedAt { get; set; }
+        [Column("created_at")]
+        public DateTime CreatedAt { get; set; }
+    }
 }

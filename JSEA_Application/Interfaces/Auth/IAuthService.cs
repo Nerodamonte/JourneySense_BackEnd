@@ -11,6 +11,7 @@ namespace JSEA_Application.Interfaces.Auth
     {
         Task<LoginResponse> LoginAsync(string email, string password);
         Task<LoginResponse> RefreshTokenAsync(string refreshToken); 
-        Task LogoutAsync(string refreshToken); 
+        Task LogoutAsync(string refreshToken);
+        Task RegisterSetPasswordAsync(string email, string password, string confirmPassword);
     }
 }
