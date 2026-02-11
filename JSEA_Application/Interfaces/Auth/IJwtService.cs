@@ -17,5 +17,6 @@ namespace JSEA_Application.Interfaces.Auth
         Task SaveRefreshTokenAsync(Guid userId, string refreshToken);
         Task<RefreshToken?> GetRefreshTokenAsync(string refreshToken);
         Task RevokeRefreshTokenAsync(string refreshToken);
+        string GenerateRegisterToken(string email);
     }
 }

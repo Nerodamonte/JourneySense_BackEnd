@@ -3,28 +3,32 @@ using JSEA_Application.Enums;
 using JSEA_Application.Interfaces.Auth;
 using JSEA_Application.DTOs.Respone.Auth;
 using Microsoft.Extensions.Configuration;
+using JSEA_Application.Models;
 
 namespace JSEA_Application.Services.Auth;
 
 public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
+    private readonly IEmailOtpRepository _emailOtpRepository;
     private readonly IJwtService _jwtService;
     private readonly IConfiguration _configuration;
 
     public AuthService(
         IUserRepository userRepository,
+         IEmailOtpRepository emailOtpRepository,
         IJwtService jwtService,
         IConfiguration configuration)
     {
         _userRepository = userRepository;
+        _emailOtpRepository = emailOtpRepository;
         _jwtService = jwtService;
         _configuration = configuration;
     }
 
     public async Task<LoginResponse> LoginAsync(string email, string password)
     {
-        var user = _userRepository.GetByEmail(email);
+        var user = await _userRepository.GetByEmailAsync(email);
 
         if (user == null)
             throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng");
@@ -45,7 +49,7 @@ public class AuthService : IAuthService
 
         // Update last login
         user.LastLoginAt = DateTime.UtcNow;
-        _userRepository.Update(user);
+        _userRepository.UpdateAsync(user);
 
         return new LoginResponse
         {
@@ -86,7 +90,39 @@ public class AuthService : IAuthService
         };
     }
 
-  
+    public async Task RegisterSetPasswordAsync(
+       string email,
+        string password,
+        string confirmPassword
+    )
+    {
+        // 1. Validate password
+        if (password != confirmPassword)
+            throw new Exception("Password không khớp");
+
+        // 2. Check user đã tồn tại chưa
+        var existingUser = await _userRepository.GetByEmailAsync(email);
+        if (existingUser != null)
+            throw new Exception("Email đã được đăng ký");
+
+        // 4. Create user
+        var user = new User
+        {
+            Id = Guid.NewGuid(),
+            Email = email,
+            Status = UserStatus.Active,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(password);
+
+        await _userRepository.CreateAsync(user);
+
+        // 5. Mark OTP đã dùng
+        await _emailOtpRepository.MarkAllUsedByEmailAsync(email);
+    }
+
+
     public async Task LogoutAsync(string refreshToken)
     {
         await _jwtService.RevokeRefreshTokenAsync(refreshToken);

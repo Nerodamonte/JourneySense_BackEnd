@@ -40,6 +40,7 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<SystemConfig> SystemConfigs { get; set; }
     public virtual DbSet<Transaction> Transactions { get; set; }
     public virtual DbSet<User> Users { get; set; }
+    public virtual DbSet<EmailOtp> EmailOtps { get; set; } = null!;
     public virtual DbSet<UserFavorite> UserFavorites { get; set; }
     public virtual DbSet<UserPackage> UserPackages { get; set; }
     public virtual DbSet<UserProfile> UserProfiles { get; set; }

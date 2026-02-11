@@ -9,7 +9,8 @@ namespace JSEA_Application.Interfaces
 {
     public interface IUserRepository
     {
-        User? GetByEmail(string email);
-        void Update(User user);
+        Task<User?> GetByEmailAsync(string email);
+        Task CreateAsync(User user);
+        Task UpdateAsync(User user);
     }
 }

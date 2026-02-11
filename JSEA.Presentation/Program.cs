@@ -43,7 +43,9 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
-
+builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
+builder.Services.AddScoped<IEmailOtpRepository, EmailOtpRepository>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 #endregion
 
 #region Controllers + JSON Enum as string
@@ -62,6 +64,7 @@ builder.Services.AddControllers()
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var secretKey = jwtSection["Secret"]!;
+var registerSecretKey = jwtSection["RegisterKey"]!;
 
 builder.Services
     .AddAuthentication(options =>
@@ -85,6 +88,27 @@ builder.Services
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(secretKey)
+            ),
+
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+    })
+
+    // ===== JWT RIÊNG CHO REGISTER =====
+    .AddJwtBearer("Register", options =>
+    {
+        options.RequireHttpsMetadata = false;
+        options.SaveToken = false;
+
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(registerSecretKey)
             ),
 
             ValidateLifetime = true,
