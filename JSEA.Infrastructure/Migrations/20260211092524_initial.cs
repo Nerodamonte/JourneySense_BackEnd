@@ -53,6 +53,23 @@ namespace JSEA_Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "email_otps",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
+                    email = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    otp_code = table.Column<string>(type: "character varying(6)", maxLength: 6, nullable: false),
+                    expired_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    is_used = table.Column<bool>(type: "boolean", nullable: true, defaultValue: false),
+                    is_verified = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true, defaultValueSql: "now()")
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("email_otps_pkey", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "packages",
                 columns: table => new
                 {
@@ -745,6 +762,11 @@ namespace JSEA_Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "idx_email_otps_email",
+                table: "email_otps",
+                column: "email");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_event_occurrences_event_id",
                 table: "event_occurrences",
                 column: "event_id");
@@ -968,6 +990,9 @@ namespace JSEA_Infrastructure.Migrations
         {
             migrationBuilder.DropTable(
                 name: "audit_logs");
+
+            migrationBuilder.DropTable(
+                name: "email_otps");
 
             migrationBuilder.DropTable(
                 name: "event_occurrences");
