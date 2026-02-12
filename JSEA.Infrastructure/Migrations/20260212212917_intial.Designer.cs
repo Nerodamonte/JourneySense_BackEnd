@@ -15,8 +15,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace JSEA_Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260211092524_initial")]
-    partial class initial
+    [Migration("20260212212917_intial")]
+    partial class intial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -26,25 +26,10 @@ namespace JSEA_Infrastructure.Migrations
                 .HasAnnotation("ProductVersion", "8.0.23")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "action_type", "action_type", new[] { "create", "update", "delete", "verify", "feature", "reject", "login", "logout" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "experience_status", "experience_status", new[] { "active_unverified", "verified", "featured", "needs_update", "inactive", "rejected" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "interaction_type", "interaction_type", new[] { "accepted", "skipped", "saved", "viewed_details" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "journey_status", "journey_status", new[] { "planning", "in_progress", "completed", "cancelled" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "mood_type", "mood_type", new[] { "relax", "photography", "foodie", "adventure", "culture" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "notification_type", "notification_type", new[] { "experience_verified", "featured", "rejected", "time_budget_warning" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "package_type", "package_type", new[] { "basic", "pro" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "recurrence_pattern", "recurrence_pattern", new[] { "once", "daily", "weekly", "monthly", "yearly", "custom" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "season_type", "season_type", new[] { "year_round", "summer", "autumn", "winter", "spring" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "time_of_day", "time_of_day", new[] { "morning", "afternoon", "evening", "night" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "transaction_status", "transaction_status", new[] { "pending", "completed", "failed", "refunded" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "transaction_type", "transaction_type", new[] { "purchase", "renewal", "upgrade" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "user_role", "user_role", new[] { "traveler", "staff", "admin" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "user_status", "user_status", new[] { "pending_verification", "active", "suspended", "deleted" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "vehicle_type", "vehicle_type", new[] { "walking", "bicycle", "motorbike", "car" });
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "weather_type", "weather_type", new[] { "sunny", "cloudy", "rainy" });
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "fuzzystrmatch");
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "postgis");
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "uuid-ossp");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("JSEA_Application.Models.AuditLog", b =>
@@ -55,8 +40,10 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<int>("ActionType")
-                        .HasColumnType("integer")
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("action_type");
 
                     b.Property<DateTime?>("CreatedAt")
@@ -159,7 +146,7 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<DateTime?>("CreatedAt")
+                    b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
@@ -175,7 +162,7 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expired_at");
 
-                    b.Property<bool?>("IsUsed")
+                    b.Property<bool>("IsUsed")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false)
@@ -189,15 +176,12 @@ namespace JSEA_Infrastructure.Migrations
 
                     b.Property<string>("OtpCode")
                         .IsRequired()
-                        .HasMaxLength(6)
-                        .HasColumnType("character varying(6)")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
                         .HasColumnName("otp_code");
 
                     b.HasKey("Id")
                         .HasName("email_otps_pkey");
-
-                    b.HasIndex("Email")
-                        .HasDatabaseName("idx_email_otps_email");
 
                     b.ToTable("email_otps");
                 });
@@ -227,8 +211,10 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("experience_id");
 
-                    b.Property<int?>("RecurrencePattern")
-                        .HasColumnType("integer")
+                    b.Property<string>("RecurrencePattern")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("recurrence_pattern");
 
                     b.Property<string>("RecurrenceRule")
@@ -257,8 +243,6 @@ namespace JSEA_Infrastructure.Migrations
                         .HasName("events_pkey");
 
                     b.HasIndex("ExperienceId");
-
-                    b.HasIndex("UploadedByUserId");
 
                     b.ToTable("events");
                 });
@@ -453,8 +437,6 @@ namespace JSEA_Infrastructure.Migrations
 
                     b.HasIndex("ExperienceId");
 
-                    b.HasIndex("UploadedByUserId");
-
                     b.ToTable("experience_photos");
                 });
 
@@ -501,16 +483,11 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnName("traveler_id");
 
                     b.Property<Guid?>("VisitId")
-                        .IsRequired()
                         .HasColumnType("uuid")
                         .HasColumnName("visit_id");
 
                     b.HasKey("Id")
                         .HasName("feedbacks_pkey");
-
-                    b.HasIndex("ExperienceId");
-
-                    b.HasIndex("TravelerId");
 
                     b.HasIndex(new[] { "VisitId" }, "feedbacks_visit_id_key")
                         .IsUnique();
@@ -548,8 +525,9 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<int?>("CurrentMood")
-                        .HasColumnType("integer")
+                    b.Property<string>("CurrentMood")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("current_mood");
 
                     b.Property<string>("DestinationAddress")
@@ -590,8 +568,9 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer")
+                    b.Property<string>("Status")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("status");
 
                     b.Property<int?>("TimeBudgetMinutes")
@@ -606,8 +585,9 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("traveler_id");
 
-                    b.Property<int>("VehicleType")
-                        .HasColumnType("integer")
+                    b.Property<string>("VehicleType")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("vehicle_type");
 
                     b.HasKey("Id")
@@ -746,8 +726,8 @@ namespace JSEA_Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
-                        .HasDefaultValue("Vietnam")
-                        .HasColumnName("country");
+                        .HasColumnName("country")
+                        .HasDefaultValueSql("'Vietnam'::character varying");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -764,14 +744,12 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("name");
 
-                    b.Property<int[]>("PreferredTimes")
-                        .IsRequired()
-                        .HasColumnType("integer[]")
+                    b.Property<List<string>>("PreferredTimes")
+                        .HasColumnType("character varying(50)[]")
                         .HasColumnName("preferred_times");
 
-                    b.Property<int[]>("Seasonality")
-                        .IsRequired()
-                        .HasColumnType("integer[]")
+                    b.Property<List<string>>("Seasonality")
+                        .HasColumnType("character varying(50)[]")
                         .HasColumnName("seasonality");
 
                     b.Property<string>("Slug")
@@ -779,13 +757,13 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("slug");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer")
+                    b.Property<string>("Status")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("status");
 
-                    b.Property<int[]>("SuitableMoods")
-                        .IsRequired()
-                        .HasColumnType("integer[]")
+                    b.Property<List<string>>("SuitableMoods")
+                        .HasColumnType("character varying(50)[]")
                         .HasColumnName("suitable_moods");
 
                     b.Property<List<string>>("Tags")
@@ -800,9 +778,8 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("uploaded_by_user_id");
 
-                    b.Property<int[]>("WeatherSuitability")
-                        .IsRequired()
-                        .HasColumnType("integer[]")
+                    b.Property<List<string>>("WeatherSuitability")
+                        .HasColumnType("character varying(50)[]")
                         .HasColumnName("weather_suitability");
 
                     b.HasKey("Id")
@@ -842,8 +819,10 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasColumnName("message");
 
-                    b.Property<int>("NotificationType")
-                        .HasColumnType("integer")
+                    b.Property<string>("NotificationType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("notification_type");
 
                     b.Property<DateTime?>("ReadAt")
@@ -869,10 +848,6 @@ namespace JSEA_Infrastructure.Migrations
 
                     b.HasKey("Id")
                         .HasName("notifications_pkey");
-
-                    b.HasIndex("RelatedExperienceId");
-
-                    b.HasIndex("RelatedJourneyId");
 
                     b.HasIndex("UserId");
 
@@ -928,8 +903,10 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("title");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("integer")
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("type");
 
                     b.HasKey("Id")
@@ -965,16 +942,11 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnName("traveler_id");
 
                     b.Property<Guid?>("VisitId")
-                        .IsRequired()
                         .HasColumnType("uuid")
                         .HasColumnName("visit_id");
 
                     b.HasKey("Id")
                         .HasName("ratings_pkey");
-
-                    b.HasIndex("ExperienceId");
-
-                    b.HasIndex("TravelerId");
 
                     b.HasIndex(new[] { "VisitId" }, "ratings_visit_id_key")
                         .IsUnique();
@@ -990,13 +962,13 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
-                    b.Property<DateTime>("CreatedAt")
+                    b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<DateTime>("ExpiresAt")
+                    b.Property<DateTime?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
@@ -1005,7 +977,6 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnName("revoked_at");
 
                     b.Property<string>("TokenHash")
-                        .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("token_hash");
@@ -1087,8 +1058,10 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnName("interacted_at")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<int>("InteractionType")
-                        .HasColumnType("integer")
+                    b.Property<string>("InteractionType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("interaction_type");
 
                     b.Property<Guid?>("SuggestionId")
@@ -1135,8 +1108,6 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("system_configs_pkey");
 
-                    b.HasIndex("UpdatedByUserId");
-
                     b.HasIndex(new[] { "ConfigKey" }, "system_configs_config_key_key")
                         .IsUnique();
 
@@ -1155,10 +1126,6 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("amount");
 
-                    b.Property<string>("CheckoutUrl")
-                        .HasColumnType("text")
-                        .HasColumnName("checkout_url");
-
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -1169,38 +1136,26 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("item_snapshot");
 
-                    b.Property<long?>("OrderCode")
-                        .HasColumnType("bigint")
-                        .HasColumnName("order_code");
-
-                    b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("paid_at");
-
-                    b.Property<string>("PaymentLinkId")
-                        .HasColumnType("text")
-                        .HasColumnName("payment_link_id");
-
                     b.Property<string>("PaymentMethod")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)")
                         .HasColumnName("payment_method");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer")
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("status");
 
-                    b.Property<int>("Type")
-                        .HasColumnType("integer")
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("type");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
-
-                    b.Property<string>("WebhookData")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("webhook_data");
 
                     b.HasKey("Id")
                         .HasName("transactions_pkey");
@@ -1217,15 +1172,6 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
-
-                    b.Property<int>("AccessFailedCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("access_failed_count");
-
-                    b.Property<string>("AuthProvider")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
-                        .HasColumnName("auth_provider");
 
                     b.Property<DateTime?>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -1269,25 +1215,16 @@ namespace JSEA_Infrastructure.Migrations
                         .HasDefaultValue(false)
                         .HasColumnName("phone_verified");
 
-                    b.Property<string>("ProviderKey")
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("provider_key");
-
-                    b.Property<DateTime?>("ResetPasswordExpiry")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("reset_password_expiry");
-
-                    b.Property<string>("ResetPasswordToken")
-                        .HasColumnType("text")
-                        .HasColumnName("reset_password_token");
-
-                    b.Property<int>("Role")
-                        .HasColumnType("integer")
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("role");
 
-                    b.Property<int>("Status")
-                        .HasColumnType("integer")
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasColumnName("status");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -1487,7 +1424,8 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.User", "User")
                         .WithMany("AuditLogs")
                         .HasForeignKey("UserId")
-                        .HasConstraintName("audit_logs_user_id_fkey");
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_audit_user");
 
                     b.Navigation("User");
                 });
@@ -1497,16 +1435,10 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.MicroExperience", "Experience")
                         .WithMany("Events")
                         .HasForeignKey("ExperienceId")
-                        .HasConstraintName("events_experience_id_fkey");
-
-                    b.HasOne("JSEA_Application.Models.User", "UploadedByUser")
-                        .WithMany("Events")
-                        .HasForeignKey("UploadedByUserId")
-                        .HasConstraintName("events_uploaded_by_user_id_fkey");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_event_exp");
 
                     b.Navigation("Experience");
-
-                    b.Navigation("UploadedByUser");
                 });
 
             modelBuilder.Entity("JSEA_Application.Models.EventOccurrence", b =>
@@ -1514,47 +1446,48 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.Event", "Event")
                         .WithMany("EventOccurrences")
                         .HasForeignKey("EventId")
-                        .HasConstraintName("event_occurrences_event_id_fkey");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_occ_event");
 
                     b.Navigation("Event");
                 });
 
             modelBuilder.Entity("JSEA_Application.Models.ExperienceDetail", b =>
                 {
-                    b.HasOne("JSEA_Application.Models.MicroExperience", "MicroExperience")
-                        .WithOne("Details")
+                    b.HasOne("JSEA_Application.Models.MicroExperience", "Experience")
+                        .WithOne("ExperienceDetail")
                         .HasForeignKey("JSEA_Application.Models.ExperienceDetail", "ExperienceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("experience_details_experience_id_fkey");
+                        .HasConstraintName("fk_detail_exp");
 
                     b.HasOne("JSEA_Application.Models.User", "FeaturedByUser")
                         .WithMany("ExperienceDetailFeaturedByUsers")
                         .HasForeignKey("FeaturedByUserId")
-                        .HasConstraintName("experience_details_featured_by_user_id_fkey");
+                        .HasConstraintName("fk_detail_featured");
 
                     b.HasOne("JSEA_Application.Models.User", "VerifiedByUser")
                         .WithMany("ExperienceDetailVerifiedByUsers")
                         .HasForeignKey("VerifiedByUserId")
-                        .HasConstraintName("experience_details_verified_by_user_id_fkey");
+                        .HasConstraintName("fk_detail_verifier");
+
+                    b.Navigation("Experience");
 
                     b.Navigation("FeaturedByUser");
-
-                    b.Navigation("MicroExperience");
 
                     b.Navigation("VerifiedByUser");
                 });
 
             modelBuilder.Entity("JSEA_Application.Models.ExperienceMetric", b =>
                 {
-                    b.HasOne("JSEA_Application.Models.MicroExperience", "MicroExperience")
-                        .WithOne("Metrics")
+                    b.HasOne("JSEA_Application.Models.MicroExperience", "Experience")
+                        .WithOne("ExperienceMetric")
                         .HasForeignKey("JSEA_Application.Models.ExperienceMetric", "ExperienceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("experience_metrics_experience_id_fkey");
+                        .HasConstraintName("fk_metric_exp");
 
-                    b.Navigation("MicroExperience");
+                    b.Navigation("Experience");
                 });
 
             modelBuilder.Entity("JSEA_Application.Models.ExperiencePhoto", b =>
@@ -1563,40 +1496,18 @@ namespace JSEA_Infrastructure.Migrations
                         .WithMany("ExperiencePhotos")
                         .HasForeignKey("ExperienceId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .HasConstraintName("experience_photos_experience_id_fkey");
-
-                    b.HasOne("JSEA_Application.Models.User", "UploadedByUser")
-                        .WithMany("ExperiencePhotos")
-                        .HasForeignKey("UploadedByUserId")
-                        .HasConstraintName("experience_photos_uploaded_by_user_id_fkey");
+                        .HasConstraintName("fk_photo_exp");
 
                     b.Navigation("Experience");
-
-                    b.Navigation("UploadedByUser");
                 });
 
             modelBuilder.Entity("JSEA_Application.Models.Feedback", b =>
                 {
-                    b.HasOne("JSEA_Application.Models.MicroExperience", "Experience")
-                        .WithMany("Feedbacks")
-                        .HasForeignKey("ExperienceId")
-                        .HasConstraintName("feedbacks_experience_id_fkey");
-
-                    b.HasOne("JSEA_Application.Models.User", "Traveler")
-                        .WithMany("Feedbacks")
-                        .HasForeignKey("TravelerId")
-                        .HasConstraintName("feedbacks_traveler_id_fkey");
-
                     b.HasOne("JSEA_Application.Models.Visit", "Visit")
                         .WithOne("Feedback")
                         .HasForeignKey("JSEA_Application.Models.Feedback", "VisitId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .IsRequired()
-                        .HasConstraintName("feedbacks_visit_id_fkey");
-
-                    b.Navigation("Experience");
-
-                    b.Navigation("Traveler");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_feedback_visit");
 
                     b.Navigation("Visit");
                 });
@@ -1606,7 +1517,8 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.User", "Traveler")
                         .WithMany("Journeys")
                         .HasForeignKey("TravelerId")
-                        .HasConstraintName("journeys_traveler_id_fkey");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_journey_user");
 
                     b.Navigation("Traveler");
                 });
@@ -1616,17 +1528,18 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.MicroExperience", "Experience")
                         .WithMany("JourneySuggestions")
                         .HasForeignKey("ExperienceId")
-                        .HasConstraintName("journey_suggestions_experience_id_fkey");
+                        .HasConstraintName("fk_sugg_exp");
 
                     b.HasOne("JSEA_Application.Models.Journey", "Journey")
                         .WithMany("JourneySuggestions")
                         .HasForeignKey("JourneyId")
-                        .HasConstraintName("journey_suggestions_journey_id_fkey");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_sugg_journey");
 
                     b.HasOne("JSEA_Application.Models.RouteSegment", "Segment")
                         .WithMany("JourneySuggestions")
                         .HasForeignKey("SegmentId")
-                        .HasConstraintName("journey_suggestions_segment_id_fkey");
+                        .HasConstraintName("fk_sugg_segment");
 
                     b.Navigation("Experience");
 
@@ -1640,13 +1553,13 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.MicroExperience", "Experience")
                         .WithMany("JourneyWaypoints")
                         .HasForeignKey("ExperienceId")
-                        .HasConstraintName("journey_waypoints_experience_id_fkey");
+                        .HasConstraintName("fk_waypoint_exp");
 
                     b.HasOne("JSEA_Application.Models.Journey", "Journey")
                         .WithMany("JourneyWaypoints")
                         .HasForeignKey("JourneyId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .HasConstraintName("journey_waypoints_journey_id_fkey");
+                        .HasConstraintName("fk_waypoint_journey");
 
                     b.Navigation("Experience");
 
@@ -1658,12 +1571,14 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.Category", "Category")
                         .WithMany("MicroExperiences")
                         .HasForeignKey("CategoryId")
-                        .HasConstraintName("micro_experiences_category_id_fkey");
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_exp_cat");
 
                     b.HasOne("JSEA_Application.Models.User", "UploadedByUser")
                         .WithMany("MicroExperiences")
                         .HasForeignKey("UploadedByUserId")
-                        .HasConstraintName("micro_experiences_uploaded_by_user_id_fkey");
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_exp_user");
 
                     b.Navigation("Category");
 
@@ -1672,50 +1587,22 @@ namespace JSEA_Infrastructure.Migrations
 
             modelBuilder.Entity("JSEA_Application.Models.Notification", b =>
                 {
-                    b.HasOne("JSEA_Application.Models.MicroExperience", "RelatedExperience")
-                        .WithMany("Notifications")
-                        .HasForeignKey("RelatedExperienceId")
-                        .HasConstraintName("notifications_related_experience_id_fkey");
-
-                    b.HasOne("JSEA_Application.Models.Journey", "RelatedJourney")
-                        .WithMany("Notifications")
-                        .HasForeignKey("RelatedJourneyId")
-                        .HasConstraintName("notifications_related_journey_id_fkey");
-
                     b.HasOne("JSEA_Application.Models.User", "User")
                         .WithMany("Notifications")
                         .HasForeignKey("UserId")
-                        .HasConstraintName("notifications_user_id_fkey");
-
-                    b.Navigation("RelatedExperience");
-
-                    b.Navigation("RelatedJourney");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_notif_user");
 
                     b.Navigation("User");
                 });
 
             modelBuilder.Entity("JSEA_Application.Models.Rating", b =>
                 {
-                    b.HasOne("JSEA_Application.Models.MicroExperience", "Experience")
-                        .WithMany("Ratings")
-                        .HasForeignKey("ExperienceId")
-                        .HasConstraintName("ratings_experience_id_fkey");
-
-                    b.HasOne("JSEA_Application.Models.User", "Traveler")
-                        .WithMany("Ratings")
-                        .HasForeignKey("TravelerId")
-                        .HasConstraintName("ratings_traveler_id_fkey");
-
                     b.HasOne("JSEA_Application.Models.Visit", "Visit")
                         .WithOne("Rating")
                         .HasForeignKey("JSEA_Application.Models.Rating", "VisitId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .IsRequired()
-                        .HasConstraintName("ratings_visit_id_fkey");
-
-                    b.Navigation("Experience");
-
-                    b.Navigation("Traveler");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_rating_visit");
 
                     b.Navigation("Visit");
                 });
@@ -1727,7 +1614,7 @@ namespace JSEA_Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("refresh_tokens_user_id_fkey");
+                        .HasConstraintName("fk_refresh_token_user");
 
                     b.Navigation("User");
                 });
@@ -1738,7 +1625,7 @@ namespace JSEA_Infrastructure.Migrations
                         .WithMany("RouteSegments")
                         .HasForeignKey("JourneyId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .HasConstraintName("route_segments_journey_id_fkey");
+                        .HasConstraintName("fk_segment_journey");
 
                     b.Navigation("Journey");
                 });
@@ -1748,19 +1635,10 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.JourneySuggestion", "Suggestion")
                         .WithMany("SuggestionInteractions")
                         .HasForeignKey("SuggestionId")
-                        .HasConstraintName("suggestion_interactions_suggestion_id_fkey");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_interact_sugg");
 
                     b.Navigation("Suggestion");
-                });
-
-            modelBuilder.Entity("JSEA_Application.Models.SystemConfig", b =>
-                {
-                    b.HasOne("JSEA_Application.Models.User", "UpdatedByUser")
-                        .WithMany("SystemConfigs")
-                        .HasForeignKey("UpdatedByUserId")
-                        .HasConstraintName("system_configs_updated_by_user_id_fkey");
-
-                    b.Navigation("UpdatedByUser");
                 });
 
             modelBuilder.Entity("JSEA_Application.Models.Transaction", b =>
@@ -1768,7 +1646,8 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.User", "User")
                         .WithMany("Transactions")
                         .HasForeignKey("UserId")
-                        .HasConstraintName("transactions_user_id_fkey");
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_trans_user");
 
                     b.Navigation("User");
                 });
@@ -1778,14 +1657,16 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.MicroExperience", "Experience")
                         .WithMany("UserFavorites")
                         .HasForeignKey("ExperienceId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("user_favorites_experience_id_fkey");
+                        .HasConstraintName("fk_fav_exp");
 
                     b.HasOne("JSEA_Application.Models.User", "User")
                         .WithMany("UserFavorites")
                         .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("user_favorites_user_id_fkey");
+                        .HasConstraintName("fk_fav_user");
 
                     b.Navigation("Experience");
 
@@ -1797,12 +1678,13 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.Package", "Package")
                         .WithMany("UserPackages")
                         .HasForeignKey("PackageId")
-                        .HasConstraintName("user_packages_package_id_fkey");
+                        .HasConstraintName("fk_upkg_pkg");
 
                     b.HasOne("JSEA_Application.Models.User", "User")
                         .WithMany("UserPackages")
                         .HasForeignKey("UserId")
-                        .HasConstraintName("user_packages_user_id_fkey");
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_upkg_user");
 
                     b.Navigation("Package");
 
@@ -1812,11 +1694,11 @@ namespace JSEA_Infrastructure.Migrations
             modelBuilder.Entity("JSEA_Application.Models.UserProfile", b =>
                 {
                     b.HasOne("JSEA_Application.Models.User", "User")
-                        .WithOne("Profile")
+                        .WithOne("UserProfile")
                         .HasForeignKey("JSEA_Application.Models.UserProfile", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("user_profiles_user_id_fkey");
+                        .HasConstraintName("fk_user_profile");
 
                     b.Navigation("User");
                 });
@@ -1826,17 +1708,17 @@ namespace JSEA_Infrastructure.Migrations
                     b.HasOne("JSEA_Application.Models.MicroExperience", "Experience")
                         .WithMany("Visits")
                         .HasForeignKey("ExperienceId")
-                        .HasConstraintName("visits_experience_id_fkey");
+                        .HasConstraintName("fk_visit_exp");
 
                     b.HasOne("JSEA_Application.Models.Journey", "Journey")
                         .WithMany("Visits")
                         .HasForeignKey("JourneyId")
-                        .HasConstraintName("visits_journey_id_fkey");
+                        .HasConstraintName("fk_visit_journey");
 
                     b.HasOne("JSEA_Application.Models.User", "Traveler")
                         .WithMany("Visits")
                         .HasForeignKey("TravelerId")
-                        .HasConstraintName("visits_traveler_id_fkey");
+                        .HasConstraintName("fk_visit_user");
 
                     b.Navigation("Experience");
 
@@ -1861,8 +1743,6 @@ namespace JSEA_Infrastructure.Migrations
 
                     b.Navigation("JourneyWaypoints");
 
-                    b.Navigation("Notifications");
-
                     b.Navigation("RouteSegments");
 
                     b.Navigation("Visits");
@@ -1875,23 +1755,17 @@ namespace JSEA_Infrastructure.Migrations
 
             modelBuilder.Entity("JSEA_Application.Models.MicroExperience", b =>
                 {
-                    b.Navigation("Details");
-
                     b.Navigation("Events");
 
-                    b.Navigation("ExperiencePhotos");
+                    b.Navigation("ExperienceDetail");
 
-                    b.Navigation("Feedbacks");
+                    b.Navigation("ExperienceMetric");
+
+                    b.Navigation("ExperiencePhotos");
 
                     b.Navigation("JourneySuggestions");
 
                     b.Navigation("JourneyWaypoints");
-
-                    b.Navigation("Metrics");
-
-                    b.Navigation("Notifications");
-
-                    b.Navigation("Ratings");
 
                     b.Navigation("UserFavorites");
 
@@ -1912,15 +1786,9 @@ namespace JSEA_Infrastructure.Migrations
                 {
                     b.Navigation("AuditLogs");
 
-                    b.Navigation("Events");
-
                     b.Navigation("ExperienceDetailFeaturedByUsers");
 
                     b.Navigation("ExperienceDetailVerifiedByUsers");
-
-                    b.Navigation("ExperiencePhotos");
-
-                    b.Navigation("Feedbacks");
 
                     b.Navigation("Journeys");
 
@@ -1928,19 +1796,15 @@ namespace JSEA_Infrastructure.Migrations
 
                     b.Navigation("Notifications");
 
-                    b.Navigation("Profile");
-
-                    b.Navigation("Ratings");
-
                     b.Navigation("RefreshTokens");
-
-                    b.Navigation("SystemConfigs");
 
                     b.Navigation("Transactions");
 
                     b.Navigation("UserFavorites");
 
                     b.Navigation("UserPackages");
+
+                    b.Navigation("UserProfile");
 
                     b.Navigation("Visits");
                 });

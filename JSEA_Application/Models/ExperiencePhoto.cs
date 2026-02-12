@@ -39,8 +39,4 @@ public partial class ExperiencePhoto
     [ForeignKey("ExperienceId")]
     [InverseProperty("ExperiencePhotos")]
     public virtual MicroExperience? Experience { get; set; }
-
-    [ForeignKey("UploadedByUserId")]
-    [InverseProperty("ExperiencePhotos")]
-    public virtual User? UploadedByUser { get; set; }
 }

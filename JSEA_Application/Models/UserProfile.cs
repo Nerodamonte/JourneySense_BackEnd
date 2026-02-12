@@ -6,9 +6,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace JSEA_Application.Models;
 
-/// <summary>
-/// Metadata chi tiết cho từng loại user
-/// </summary>
 [Table("user_profiles")]
 [Index("UserId", Name = "user_profiles_user_id_key", IsUnique = true)]
 public partial class UserProfile
@@ -48,6 +45,6 @@ public partial class UserProfile
     public string? Permissions { get; set; }
 
     [ForeignKey("UserId")]
-    [InverseProperty("Profile")]
-    public virtual User? User { get; set; }
+    [InverseProperty("UserProfile")]
+    public virtual User User { get; set; } = null!;
 }

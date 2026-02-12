@@ -14,7 +14,6 @@ public partial class Feedback
     [Column("id")]
     public Guid Id { get; set; }
 
-    [Required]
     [Column("visit_id")]
     public Guid? VisitId { get; set; }
 
@@ -39,15 +38,6 @@ public partial class Feedback
     [Column("created_at")]
     public DateTime? CreatedAt { get; set; }
 
-    [ForeignKey("ExperienceId")]
-    [InverseProperty("Feedbacks")]
-    public virtual MicroExperience? Experience { get; set; }
-
-    [ForeignKey("TravelerId")]
-    [InverseProperty("Feedbacks")]
-    public virtual User? Traveler { get; set; }
-
-    
     [ForeignKey("VisitId")]
     [InverseProperty("Feedback")]
     public virtual Visit? Visit { get; set; }

@@ -26,17 +26,15 @@ public partial class Package
     [Precision(12, 2)]
     public decimal? SalePrice { get; set; }
 
-    /// <summary>
-    /// Lưu các quyền lợi của gói
-    /// </summary>
     [Column("benefit", TypeName = "jsonb")]
     public string? Benefit { get; set; }
 
-    /// <summary>
-    /// Giới hạn km hoặc thuộc tính liên quan
-    /// </summary>
     [Column("km")]
     public int? Km { get; set; }
+
+    [Column("type")]
+    [StringLength(50)]
+    public PackageType Type { get; set; }
 
     [Column("is_popular")]
     public bool? IsPopular { get; set; }
@@ -49,7 +47,4 @@ public partial class Package
 
     [InverseProperty("Package")]
     public virtual ICollection<UserPackage> UserPackages { get; set; } = new List<UserPackage>();
-
-    [Column("type")]
-    public PackageType Type { get; set; }
 }

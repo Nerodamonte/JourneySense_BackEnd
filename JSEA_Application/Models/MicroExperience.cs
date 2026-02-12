@@ -45,8 +45,24 @@ public partial class MicroExperience
     [StringLength(100)]
     public string? Country { get; set; }
 
+    [Column("suitable_moods", TypeName = "character varying(50)[]")]
+    public List<string>? SuitableMoods { get; set; }
+
+    [Column("preferred_times", TypeName = "character varying(50)[]")]
+    public List<string>? PreferredTimes { get; set; }
+
+    [Column("weather_suitability", TypeName = "character varying(50)[]")]
+    public List<string>? WeatherSuitability { get; set; }
+
+    [Column("seasonality", TypeName = "character varying(50)[]")]
+    public List<string>? Seasonality { get; set; }
+
     [Column("tags")]
     public List<string>? Tags { get; set; }
+
+    [Column("status")]
+    [StringLength(50)]
+    public ExperienceStatus? Status { get; set; }
 
     [Column("created_at")]
     public DateTime? CreatedAt { get; set; }
@@ -58,32 +74,23 @@ public partial class MicroExperience
     [InverseProperty("MicroExperiences")]
     public virtual Category? Category { get; set; }
 
-    [InverseProperty("MicroExperience")]
-    public virtual ExperienceMetric? Metrics { get; set; }
-
-    [InverseProperty("MicroExperience")]
-    public virtual ExperienceDetail? Details { get; set; }
-
     [InverseProperty("Experience")]
     public virtual ICollection<Event> Events { get; set; } = new List<Event>();
 
     [InverseProperty("Experience")]
-    public virtual ICollection<ExperiencePhoto> ExperiencePhotos { get; set; } = new List<ExperiencePhoto>();
+    public virtual ExperienceDetail? ExperienceDetail { get; set; }
 
     [InverseProperty("Experience")]
-    public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
+    public virtual ExperienceMetric? ExperienceMetric { get; set; }
+
+    [InverseProperty("Experience")]
+    public virtual ICollection<ExperiencePhoto> ExperiencePhotos { get; set; } = new List<ExperiencePhoto>();
 
     [InverseProperty("Experience")]
     public virtual ICollection<JourneySuggestion> JourneySuggestions { get; set; } = new List<JourneySuggestion>();
 
     [InverseProperty("Experience")]
     public virtual ICollection<JourneyWaypoint> JourneyWaypoints { get; set; } = new List<JourneyWaypoint>();
-
-    [InverseProperty("RelatedExperience")]
-    public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
-
-    [InverseProperty("Experience")]
-    public virtual ICollection<Rating> Ratings { get; set; } = new List<Rating>();
 
     [ForeignKey("UploadedByUserId")]
     [InverseProperty("MicroExperiences")]
@@ -94,19 +101,4 @@ public partial class MicroExperience
 
     [InverseProperty("Experience")]
     public virtual ICollection<Visit> Visits { get; set; } = new List<Visit>();
-
-    [Column("status")]
-    public ExperienceStatus Status { get; set; }
-
-    [Column("suitable_moods")]
-    public MoodType[] SuitableMoods { get; set; }
-
-    [Column("preferred_times")]
-    public TimeOfDay[] PreferredTimes { get; set; }
-
-    [Column("weather_suitability")]
-    public WeatherType[] WeatherSuitability { get; set; }
-
-    [Column("seasonality")]
-    public SeasonType[] Seasonality { get; set; }
 }

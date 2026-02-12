@@ -17,9 +17,6 @@ public partial class JourneyWaypoint
     [Column("journey_id")]
     public Guid? JourneyId { get; set; }
 
-    /// <summary>
-    /// Có thể là 1 micro-experience hoặc điểm tùy chỉnh
-    /// </summary>
     [Column("experience_id")]
     public Guid? ExperienceId { get; set; }
 
@@ -30,9 +27,6 @@ public partial class JourneyWaypoint
     [StringLength(500)]
     public string? Address { get; set; }
 
-    /// <summary>
-    /// Thứ tự điểm dừng 1, 2, 3...
-    /// </summary>
     [Column("stop_order")]
     public int? StopOrder { get; set; }
 

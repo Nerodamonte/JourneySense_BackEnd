@@ -38,6 +38,6 @@ public partial class ExperienceMetric
     public DateTime? UpdatedAt { get; set; }
 
     [ForeignKey("ExperienceId")]
-    [InverseProperty("Metrics")]
-    public virtual MicroExperience? MicroExperience { get; set; }
+    [InverseProperty("ExperienceMetric")]
+    public virtual MicroExperience Experience { get; set; } = null!;
 }

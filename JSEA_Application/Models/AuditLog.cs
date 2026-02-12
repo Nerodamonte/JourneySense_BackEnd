@@ -18,6 +18,10 @@ public partial class AuditLog
     [Column("user_id")]
     public Guid? UserId { get; set; }
 
+    [Column("action_type")]
+    [StringLength(50)]
+    public ActionType ActionType { get; set; }
+
     [Column("entity_type")]
     [StringLength(100)]
     public string? EntityType { get; set; }
@@ -43,6 +47,4 @@ public partial class AuditLog
     [ForeignKey("UserId")]
     [InverseProperty("AuditLogs")]
     public virtual User? User { get; set; }
-    [Column("action_type")]
-    public ActionType ActionType { get; set; }
 }

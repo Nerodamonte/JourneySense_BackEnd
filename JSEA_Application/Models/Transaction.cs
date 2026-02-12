@@ -20,23 +20,14 @@ public partial class Transaction
     [Column("amount")]
     public long? Amount { get; set; }
 
-    /// <summary>
-    /// Lưu thông tin gói tại thời điểm mua
-    /// </summary>
-    [Column("order_code")]
-    public long? OrderCode { get; set; } 
+    [Column("type")]
+    [StringLength(50)]
+    public TransactionType Type { get; set; }
 
-    [Column("payment_link_id")]
-    public string? PaymentLinkId { get; set; }
+    [Column("status")]
+    [StringLength(50)]
+    public TransactionStatus Status { get; set; }
 
-    [Column("checkout_url")]
-    public string? CheckoutUrl { get; set; }
-
-    [Column("webhook_data", TypeName = "jsonb")]
-    public string? WebhookData { get; set; } 
-
-    [Column("paid_at")]
-    public DateTime? PaidAt { get; set; }
     [Column("item_snapshot", TypeName = "jsonb")]
     public string? ItemSnapshot { get; set; }
 
@@ -50,10 +41,4 @@ public partial class Transaction
     [ForeignKey("UserId")]
     [InverseProperty("Transactions")]
     public virtual User? User { get; set; }
-
-    [Column("type")]
-    public TransactionType Type { get; set; }
-
-    [Column("status")]
-    public TransactionStatus Status { get; set; }
 }

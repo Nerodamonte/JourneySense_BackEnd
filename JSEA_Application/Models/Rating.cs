@@ -14,7 +14,6 @@ public partial class Rating
     [Column("id")]
     public Guid Id { get; set; }
 
-    [Required]
     [Column("visit_id")]
     public Guid? VisitId { get; set; }
 
@@ -29,15 +28,6 @@ public partial class Rating
 
     [Column("created_at")]
     public DateTime? CreatedAt { get; set; }
-
-    [ForeignKey("ExperienceId")]
-    [InverseProperty("Ratings")]
-    public virtual MicroExperience? Experience { get; set; }
-
-    [ForeignKey("TravelerId")]
-    [InverseProperty("Ratings")]
-    public virtual User? Traveler { get; set; }
-
 
     [ForeignKey("VisitId")]
     [InverseProperty("Rating")]
