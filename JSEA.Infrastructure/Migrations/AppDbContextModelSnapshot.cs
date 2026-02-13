@@ -151,8 +151,7 @@ namespace JSEA_Infrastructure.Migrations
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
+                        .HasColumnType("text")
                         .HasColumnName("email");
 
                     b.Property<DateTime>("ExpiredAt")
@@ -173,8 +172,7 @@ namespace JSEA_Infrastructure.Migrations
 
                     b.Property<string>("OtpCode")
                         .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
+                        .HasColumnType("text")
                         .HasColumnName("otp_code");
 
                     b.HasKey("Id")

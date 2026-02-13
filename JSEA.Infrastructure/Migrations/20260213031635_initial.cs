@@ -9,7 +9,7 @@ using NetTopologySuite.Geometries;
 namespace JSEA_Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class intial : Migration
+    public partial class initial : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -42,11 +42,11 @@ namespace JSEA_Infrastructure.Migrations
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false, defaultValueSql: "gen_random_uuid()"),
-                    email = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    otp_code = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
+                    email = table.Column<string>(type: "text", nullable: false),
+                    otp_code = table.Column<string>(type: "text", nullable: false),
                     expired_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    is_used = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     is_verified = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    is_used = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
                 },
                 constraints: table =>
@@ -88,6 +88,19 @@ namespace JSEA_Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("system_configs_pkey", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "travel_styles",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    descripton = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_travel_styles", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -322,7 +335,6 @@ namespace JSEA_Infrastructure.Migrations
                     full_name = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     avatar_url = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
                     bio = table.Column<string>(type: "text", nullable: true),
-                    preferred_travel_styles = table.Column<List<string>>(type: "text[]", nullable: true),
                     interests = table.Column<List<string>>(type: "text[]", nullable: true),
                     accessibility_needs = table.Column<string>(type: "text", nullable: true),
                     department = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
@@ -563,6 +575,31 @@ namespace JSEA_Infrastructure.Migrations
                         column: x => x.traveler_id,
                         principalTable: "users",
                         principalColumn: "id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "user_vibes",
+                columns: table => new
+                {
+                    user_profile_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    travel_style_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    selected_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("user_vibes_pkey", x => new { x.user_profile_id, x.travel_style_id });
+                    table.ForeignKey(
+                        name: "FK_user_vibes_travel_styles_travel_style_id",
+                        column: x => x.travel_style_id,
+                        principalTable: "travel_styles",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_user_vibes_user_profiles_user_profile_id",
+                        column: x => x.user_profile_id,
+                        principalTable: "user_profiles",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -851,6 +888,11 @@ namespace JSEA_Infrastructure.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_user_vibes_travel_style_id",
+                table: "user_vibes",
+                column: "travel_style_id");
+
+            migrationBuilder.CreateIndex(
                 name: "users_email_key",
                 table: "users",
                 column: "email",
@@ -930,7 +972,7 @@ namespace JSEA_Infrastructure.Migrations
                 name: "user_packages");
 
             migrationBuilder.DropTable(
-                name: "user_profiles");
+                name: "user_vibes");
 
             migrationBuilder.DropTable(
                 name: "events");
@@ -943,6 +985,12 @@ namespace JSEA_Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "packages");
+
+            migrationBuilder.DropTable(
+                name: "travel_styles");
+
+            migrationBuilder.DropTable(
+                name: "user_profiles");
 
             migrationBuilder.DropTable(
                 name: "micro_experiences");

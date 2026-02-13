@@ -15,8 +15,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace JSEA_Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260212212917_intial")]
-    partial class intial
+    [Migration("20260213031635_initial")]
+    partial class initial
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -154,8 +154,7 @@ namespace JSEA_Infrastructure.Migrations
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
+                        .HasColumnType("text")
                         .HasColumnName("email");
 
                     b.Property<DateTime>("ExpiredAt")
@@ -176,8 +175,7 @@ namespace JSEA_Infrastructure.Migrations
 
                     b.Property<string>("OtpCode")
                         .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("character varying(10)")
+                        .HasColumnType("text")
                         .HasColumnName("otp_code");
 
                     b.HasKey("Id")
@@ -1165,6 +1163,29 @@ namespace JSEA_Infrastructure.Migrations
                     b.ToTable("transactions");
                 });
 
+            modelBuilder.Entity("JSEA_Application.Models.TravelStyle", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Descripton")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("descripton");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("travel_styles");
+                });
+
             modelBuilder.Entity("JSEA_Application.Models.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1356,10 +1377,6 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("permissions");
 
-                    b.Property<List<string>>("PreferredTravelStyles")
-                        .HasColumnType("text[]")
-                        .HasColumnName("preferred_travel_styles");
-
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
@@ -1371,6 +1388,28 @@ namespace JSEA_Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("user_profiles");
+                });
+
+            modelBuilder.Entity("JSEA_Application.Models.UserVibe", b =>
+                {
+                    b.Property<Guid>("UserProfileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_profile_id");
+
+                    b.Property<Guid>("TravelStyleId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("travel_style_id");
+
+                    b.Property<DateTime>("SelectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("selected_at");
+
+                    b.HasKey("UserProfileId", "TravelStyleId")
+                        .HasName("user_vibes_pkey");
+
+                    b.HasIndex("TravelStyleId");
+
+                    b.ToTable("user_vibes");
                 });
 
             modelBuilder.Entity("JSEA_Application.Models.Visit", b =>
@@ -1703,6 +1742,25 @@ namespace JSEA_Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("JSEA_Application.Models.UserVibe", b =>
+                {
+                    b.HasOne("JSEA_Application.Models.TravelStyle", "TravelStyle")
+                        .WithMany("UserVibes")
+                        .HasForeignKey("TravelStyleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("JSEA_Application.Models.UserProfile", "UserProfile")
+                        .WithMany("UserVibes")
+                        .HasForeignKey("UserProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TravelStyle");
+
+                    b.Navigation("UserProfile");
+                });
+
             modelBuilder.Entity("JSEA_Application.Models.Visit", b =>
                 {
                     b.HasOne("JSEA_Application.Models.MicroExperience", "Experience")
@@ -1782,6 +1840,11 @@ namespace JSEA_Infrastructure.Migrations
                     b.Navigation("JourneySuggestions");
                 });
 
+            modelBuilder.Entity("JSEA_Application.Models.TravelStyle", b =>
+                {
+                    b.Navigation("UserVibes");
+                });
+
             modelBuilder.Entity("JSEA_Application.Models.User", b =>
                 {
                     b.Navigation("AuditLogs");
@@ -1807,6 +1870,11 @@ namespace JSEA_Infrastructure.Migrations
                     b.Navigation("UserProfile");
 
                     b.Navigation("Visits");
+                });
+
+            modelBuilder.Entity("JSEA_Application.Models.UserProfile", b =>
+                {
+                    b.Navigation("UserVibes");
                 });
 
             modelBuilder.Entity("JSEA_Application.Models.Visit", b =>
