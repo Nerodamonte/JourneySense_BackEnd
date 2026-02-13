@@ -30,6 +30,18 @@ namespace JSEA_Application.Services.Auth
             if (existingUser != null)
                 throw new Exception("Email đã được đăng ký");
 
+            var activeOtp = await _otpRepository.GetLatestActiveOtpAsync(email);
+
+            if (activeOtp != null)
+            {
+                var secondsSinceLastSend =
+                    (DateTime.UtcNow - activeOtp.CreatedAt).TotalSeconds;
+
+                if (secondsSinceLastSend < 60)
+                    throw new Exception("Vui lòng đợi 60 giây trước khi gửi lại OTP.");
+            }
+            await _otpRepository.InvalidateAllActiveOtpAsync(email);
+
             var otp = new Random().Next(100000, 999999).ToString();
 
             var entity = new EmailOtp
@@ -94,6 +106,52 @@ namespace JSEA_Application.Services.Auth
 
             // 3️⃣ Generate register token
             return _jwtService.GenerateRegisterToken(emailOtp.Email);
+        }
+
+        public async Task ResendRegisterOtpAsync(string email)
+        {
+
+            var activeOtp = await _otpRepository.GetLatestActiveOtpAsync(email);
+
+            if (activeOtp != null)
+            {
+                var secondsSinceLastSend =
+                    (DateTime.UtcNow - activeOtp.CreatedAt).TotalSeconds;
+
+                if (secondsSinceLastSend < 60)
+                    throw new Exception("Vui lòng đợi 60 giây trước khi gửi lại OTP.");
+            }
+
+
+            await _otpRepository.InvalidateAllActiveOtpAsync(email);
+
+            var otpCode = GenerateOtp();
+
+            var otp = new EmailOtp
+            {
+                Id = Guid.NewGuid(),
+                Email = email,
+                OtpCode = otpCode,
+                CreatedAt = DateTime.UtcNow,
+                ExpiredAt = DateTime.UtcNow.AddMinutes(5),
+                IsUsed = false,
+                IsVerified = false
+            };
+
+            await _otpRepository.AddAsync(otp);
+
+            var body = $@"
+        <h2>Journey Sense</h2>
+        <p>Mã OTP mới của bạn là:</p>
+        <h1>{otpCode}</h1>
+        <p>OTP có hiệu lực trong 5 phút.</p>
+    ";
+
+            await _emailSender.SendAsync(
+                email,
+                "Mã xác thực OTP (Resend)",
+                body
+            );
         }
     }
 }
