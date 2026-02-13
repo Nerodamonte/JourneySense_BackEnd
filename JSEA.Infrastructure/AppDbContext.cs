@@ -67,9 +67,9 @@ public partial class AppDbContext : DbContext
 
     public virtual DbSet<Visit> Visits { get; set; }
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=JSEA;Username=postgres;Password=5432", x => x.UseNetTopologySuite());
+//    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+//#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
+//        => optionsBuilder.UseNpgsql("Host=localhost;Port=5432;Database=JSEA;Username=postgres;Password=5432", x => x.UseNetTopologySuite());
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -413,6 +413,22 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Journey).WithMany(p => p.Visits).HasConstraintName("fk_visit_journey");
 
             entity.HasOne(d => d.Traveler).WithMany(p => p.Visits).HasConstraintName("fk_visit_user");
+        });
+
+        modelBuilder.Entity<UserVibe>(entity =>
+        {
+            entity.HasKey(uv => new { uv.UserProfileId, uv.TravelStyleId })
+                  .HasName("user_vibes_pkey");
+
+            entity.HasOne(uv => uv.UserProfile)
+                  .WithMany(up => up.UserVibes)
+                  .HasForeignKey(uv => uv.UserProfileId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(uv => uv.TravelStyle)
+                  .WithMany(ts => ts.UserVibes)
+                  .HasForeignKey(uv => uv.TravelStyleId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         OnModelCreatingPartial(modelBuilder);

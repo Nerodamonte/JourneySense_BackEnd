@@ -28,8 +28,8 @@ public partial class UserProfile
     [Column("bio")]
     public string? Bio { get; set; }
 
-    [Column("preferred_travel_styles")]
-    public List<string>? PreferredTravelStyles { get; set; }
+    [InverseProperty("UserProfile")]
+    public virtual ICollection<UserVibe> UserVibes { get; set; } = new List<UserVibe>();
 
     [Column("interests")]
     public List<string>? Interests { get; set; }
