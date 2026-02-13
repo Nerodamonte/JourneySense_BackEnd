@@ -24,22 +24,22 @@ namespace JSEA_Application.Services.Auth
             _userRepository = userRepository;
         }
 
+        private async Task ValidateOtpSendingRule(string email)
+        {
+            var countLast60s =
+                await _otpRepository.CountOtpSentInLastSecondsAsync(email, 60);
+
+            if (countLast60s >= 2)
+                throw new Exception("Vui lòng đợi 60 giây trước khi gửi lại OTP.");
+        }
+
         public async Task SendOtpAsync(string email)
         {
             var existingUser = await _userRepository.GetByEmailAsync(email);
             if (existingUser != null)
                 throw new Exception("Email đã được đăng ký");
 
-            var activeOtp = await _otpRepository.GetLatestActiveOtpAsync(email);
-
-            if (activeOtp != null)
-            {
-                var secondsSinceLastSend =
-                    (DateTime.UtcNow - activeOtp.CreatedAt).TotalSeconds;
-
-                if (secondsSinceLastSend < 60)
-                    throw new Exception("Vui lòng đợi 60 giây trước khi gửi lại OTP.");
-            }
+            await ValidateOtpSendingRule(email);
             await _otpRepository.InvalidateAllActiveOtpAsync(email);
 
             var otp = new Random().Next(100000, 999999).ToString();
@@ -110,18 +110,7 @@ namespace JSEA_Application.Services.Auth
 
         public async Task ResendRegisterOtpAsync(string email)
         {
-
-            var activeOtp = await _otpRepository.GetLatestActiveOtpAsync(email);
-
-            if (activeOtp != null)
-            {
-                var secondsSinceLastSend =
-                    (DateTime.UtcNow - activeOtp.CreatedAt).TotalSeconds;
-
-                if (secondsSinceLastSend < 60)
-                    throw new Exception("Vui lòng đợi 60 giây trước khi gửi lại OTP.");
-            }
-
+            await ValidateOtpSendingRule(email);
 
             await _otpRepository.InvalidateAllActiveOtpAsync(email);
 

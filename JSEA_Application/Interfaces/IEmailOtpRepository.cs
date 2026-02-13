@@ -19,5 +19,6 @@ namespace JSEA_Application.Interfaces
         Task<EmailOtp?> GetValidOtpByCodeAsync(string otp);
         Task InvalidateAllActiveOtpAsync(string email);
         Task<EmailOtp?> GetLatestActiveOtpAsync(string email);
+        Task<int> CountOtpSentInLastSecondsAsync(string email, int seconds);
     }
 }

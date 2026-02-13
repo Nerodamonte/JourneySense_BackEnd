@@ -112,5 +112,14 @@ namespace JSEA_Infrastructure.Repositories
                 .OrderByDescending(x => x.CreatedAt)
                 .FirstOrDefaultAsync();
         }
+
+        public async Task<int> CountOtpSentInLastSecondsAsync(string email, int seconds)
+        {
+            var fromTime = DateTime.UtcNow.AddSeconds(-seconds);
+
+            return await _context.EmailOtps
+                .Where(x => x.Email == email && x.CreatedAt >= fromTime)
+                .CountAsync();
+        }
     }
 }
