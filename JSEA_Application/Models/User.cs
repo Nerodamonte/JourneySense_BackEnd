@@ -28,22 +28,13 @@ public partial class User
     [StringLength(255)]
     public string? PasswordHash { get; set; }
 
-    [Column("reset_password_token")]
-    public string? ResetPasswordToken { get; set; }
-
-    [Column("reset_password_expiry")]
-    public DateTime? ResetPasswordExpiry { get; set; }
-
-    [Column("auth_provider")]
+    [Column("role")]
     [StringLength(50)]
-    public string? AuthProvider { get; set; }
+    public UserRole Role { get; set; }
 
-    [Column("provider_key")]
-    [StringLength(255)]
-    public string? ProviderKey { get; set; }
-
-    [Column("access_failed_count")]
-    public int AccessFailedCount { get; set; } = 0;
+    [Column("status")]
+    [StringLength(50)]
+    public UserStatus Status { get; set; }
 
     [Column("email_verified")]
     public bool? EmailVerified { get; set; }
@@ -63,32 +54,14 @@ public partial class User
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 
-    [Column("role")]
-    public UserRole Role { get; set; }
-
-    [Column("status")]
-    public UserStatus Status { get; set; }
-
-    [InverseProperty("User")]
-    public virtual UserProfile? Profile { get; set; }
-
     [InverseProperty("User")]
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
-
-    [InverseProperty("UploadedByUser")]
-    public virtual ICollection<Event> Events { get; set; } = new List<Event>();
 
     [InverseProperty("FeaturedByUser")]
     public virtual ICollection<ExperienceDetail> ExperienceDetailFeaturedByUsers { get; set; } = new List<ExperienceDetail>();
 
     [InverseProperty("VerifiedByUser")]
     public virtual ICollection<ExperienceDetail> ExperienceDetailVerifiedByUsers { get; set; } = new List<ExperienceDetail>();
-
-    [InverseProperty("UploadedByUser")]
-    public virtual ICollection<ExperiencePhoto> ExperiencePhotos { get; set; } = new List<ExperiencePhoto>();
-
-    [InverseProperty("Traveler")]
-    public virtual ICollection<Feedback> Feedbacks { get; set; } = new List<Feedback>();
 
     [InverseProperty("Traveler")]
     public virtual ICollection<Journey> Journeys { get; set; } = new List<Journey>();
@@ -99,14 +72,8 @@ public partial class User
     [InverseProperty("User")]
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 
-    [InverseProperty("Traveler")]
-    public virtual ICollection<Rating> Ratings { get; set; } = new List<Rating>();
-
     [InverseProperty("User")]
     public virtual ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
-
-    [InverseProperty("UpdatedByUser")]
-    public virtual ICollection<SystemConfig> SystemConfigs { get; set; } = new List<SystemConfig>();
 
     [InverseProperty("User")]
     public virtual ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
@@ -117,12 +84,9 @@ public partial class User
     [InverseProperty("User")]
     public virtual ICollection<UserPackage> UserPackages { get; set; } = new List<UserPackage>();
 
+    [InverseProperty("User")]
+    public virtual UserProfile? UserProfile { get; set; }
+
     [InverseProperty("Traveler")]
     public virtual ICollection<Visit> Visits { get; set; } = new List<Visit>();
-
-    [Column("role", TypeName = "user_role")]
-    public UserRole Role { get; set; }
-
-    [Column("status", TypeName = "user_status")]
-    public UserStatus Status { get; set; }
 }

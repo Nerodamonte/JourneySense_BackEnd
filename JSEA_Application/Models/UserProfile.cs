@@ -6,9 +6,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace JSEA_Application.Models;
 
-/// <summary>
-/// Metadata chi tiết cho từng loại user
-/// </summary>
 [Table("user_profiles")]
 [Index("UserId", Name = "user_profiles_user_id_key", IsUnique = true)]
 public partial class UserProfile
@@ -31,8 +28,8 @@ public partial class UserProfile
     [Column("bio")]
     public string? Bio { get; set; }
 
-    [Column("preferred_travel_styles")]
-    public List<string>? PreferredTravelStyles { get; set; }
+    [InverseProperty("UserProfile")]
+    public virtual ICollection<UserVibe> UserVibes { get; set; } = new List<UserVibe>();
 
     [Column("interests")]
     public List<string>? Interests { get; set; }
@@ -48,6 +45,6 @@ public partial class UserProfile
     public string? Permissions { get; set; }
 
     [ForeignKey("UserId")]
-    [InverseProperty("Profile")]
-    public virtual User? User { get; set; }
+    [InverseProperty("UserProfile")]
+    public virtual User User { get; set; } = null!;
 }

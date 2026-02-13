@@ -17,12 +17,14 @@ public partial class SuggestionInteraction
     [Column("suggestion_id")]
     public Guid? SuggestionId { get; set; }
 
+    [Column("interaction_type")]
+    [StringLength(50)]
+    public InteractionType InteractionType { get; set; }
+
     [Column("interacted_at")]
     public DateTime? InteractedAt { get; set; }
 
     [ForeignKey("SuggestionId")]
     [InverseProperty("SuggestionInteractions")]
     public virtual JourneySuggestion? Suggestion { get; set; }
-    [Column("interaction_type")]
-    public InteractionType InteractionType { get; set; }
 }

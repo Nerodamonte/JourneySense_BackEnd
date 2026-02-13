@@ -47,6 +47,14 @@ public partial class Journey
     [Column("estimated_duration_minutes")]
     public int? EstimatedDurationMinutes { get; set; }
 
+    [Column("current_mood")]
+    [StringLength(50)]
+    public MoodType? CurrentMood { get; set; }
+
+    [Column("vehicle_type")]
+    [StringLength(50)]
+    public VehicleType? VehicleType { get; set; }
+
     [Column("max_detour_distance_meters")]
     public int? MaxDetourDistanceMeters { get; set; }
 
@@ -55,6 +63,10 @@ public partial class Journey
 
     [Column("time_budget_minutes")]
     public int? TimeBudgetMinutes { get; set; }
+
+    [Column("status")]
+    [StringLength(50)]
+    public JourneyStatus? Status { get; set; }
 
     [Column("started_at")]
     public DateTime? StartedAt { get; set; }
@@ -74,9 +86,6 @@ public partial class Journey
     [InverseProperty("Journey")]
     public virtual ICollection<JourneyWaypoint> JourneyWaypoints { get; set; } = new List<JourneyWaypoint>();
 
-    [InverseProperty("RelatedJourney")]
-    public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
-
     [InverseProperty("Journey")]
     public virtual ICollection<RouteSegment> RouteSegments { get; set; } = new List<RouteSegment>();
 
@@ -86,13 +95,4 @@ public partial class Journey
 
     [InverseProperty("Journey")]
     public virtual ICollection<Visit> Visits { get; set; } = new List<Visit>();
-
-    [Column("current_mood")]
-    public MoodType? CurrentMood { get; set; }
-
-    [Column("vehicle_type")]
-    public VehicleType VehicleType { get; set; }
-
-    [Column("status")]
-    public JourneyStatus Status { get; set; }
 }

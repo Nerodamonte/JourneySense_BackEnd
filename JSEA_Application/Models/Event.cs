@@ -37,6 +37,10 @@ public partial class Event
     [Column("end_datetime")]
     public DateTime? EndDatetime { get; set; }
 
+    [Column("recurrence_pattern")]
+    [StringLength(50)]
+    public RecurrencePattern RecurrencePattern { get; set; }
+
     [Column("recurrence_rule")]
     public string? RecurrenceRule { get; set; }
 
@@ -50,10 +54,4 @@ public partial class Event
     [ForeignKey("ExperienceId")]
     [InverseProperty("Events")]
     public virtual MicroExperience? Experience { get; set; }
-
-    [ForeignKey("UploadedByUserId")]
-    [InverseProperty("Events")]
-    public virtual User? UploadedByUser { get; set; }
-    [Column("recurrence_pattern")]
-    public RecurrencePattern? RecurrencePattern { get; set; }
 }

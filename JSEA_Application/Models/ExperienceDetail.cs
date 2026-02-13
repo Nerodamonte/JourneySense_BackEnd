@@ -51,14 +51,13 @@ public partial class ExperienceDetail
     [Column("featured_by_user_id")]
     public Guid? FeaturedByUserId { get; set; }
 
+    [ForeignKey("ExperienceId")]
+    [InverseProperty("ExperienceDetail")]
+    public virtual MicroExperience Experience { get; set; } = null!;
+
     [ForeignKey("FeaturedByUserId")]
     [InverseProperty("ExperienceDetailFeaturedByUsers")]
     public virtual User? FeaturedByUser { get; set; }
-
-   
-    [ForeignKey("ExperienceId")]
-    [InverseProperty("Details")]
-    public virtual MicroExperience? MicroExperience { get; set; }
 
     [ForeignKey("VerifiedByUserId")]
     [InverseProperty("ExperienceDetailVerifiedByUsers")]

@@ -29,8 +29,4 @@ public partial class SystemConfig
 
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
-
-    [ForeignKey("UpdatedByUserId")]
-    [InverseProperty("SystemConfigs")]
-    public virtual User? UpdatedByUser { get; set; }
 }

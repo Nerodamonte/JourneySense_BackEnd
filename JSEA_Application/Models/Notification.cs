@@ -17,6 +17,10 @@ public partial class Notification
     [Column("user_id")]
     public Guid? UserId { get; set; }
 
+    [Column("notification_type")]
+    [StringLength(100)]
+    public NotificationType NotificationType { get; set; }
+
     [Column("title")]
     [StringLength(255)]
     public string? Title { get; set; }
@@ -39,18 +43,7 @@ public partial class Notification
     [Column("created_at")]
     public DateTime? CreatedAt { get; set; }
 
-    [ForeignKey("RelatedExperienceId")]
-    [InverseProperty("Notifications")]
-    public virtual MicroExperience? RelatedExperience { get; set; }
-
-    [ForeignKey("RelatedJourneyId")]
-    [InverseProperty("Notifications")]
-    public virtual Journey? RelatedJourney { get; set; }
-
     [ForeignKey("UserId")]
     [InverseProperty("Notifications")]
     public virtual User? User { get; set; }
-
-    [Column("notification_type")]
-    public NotificationType NotificationType { get; set; }
 }

@@ -35,18 +35,17 @@ public partial class Visit
     [InverseProperty("Visits")]
     public virtual MicroExperience? Experience { get; set; }
 
+    [InverseProperty("Visit")]
+    public virtual Feedback? Feedback { get; set; }
+
     [ForeignKey("JourneyId")]
     [InverseProperty("Visits")]
     public virtual Journey? Journey { get; set; }
 
-    [ForeignKey("TravelerId")]
-    [InverseProperty("Visits")]
-    public virtual User? Traveler { get; set; }
-
- 
     [InverseProperty("Visit")]
     public virtual Rating? Rating { get; set; }
 
-    [InverseProperty("Visit")]
-    public virtual Feedback? Feedback { get; set; }
+    [ForeignKey("TravelerId")]
+    [InverseProperty("Visits")]
+    public virtual User? Traveler { get; set; }
 }
