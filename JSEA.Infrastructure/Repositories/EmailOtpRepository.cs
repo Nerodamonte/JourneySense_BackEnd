@@ -88,5 +88,38 @@ namespace JSEA_Infrastructure.Repositories
                 .OrderByDescending(x => x.CreatedAt)
                 .FirstOrDefaultAsync();
         }
+
+        public async Task InvalidateAllActiveOtpAsync(string email)
+        {
+            var activeOtps = await _context.EmailOtps
+                .Where(x => x.Email == email && !x.IsUsed)
+                .ToListAsync();
+
+            foreach (var otp in activeOtps)
+            {
+                otp.IsUsed = true;
+            }
+
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task<EmailOtp?> GetLatestActiveOtpAsync(string email)
+        {
+            return await _context.EmailOtps
+                .Where(x => x.Email == email
+                            && !x.IsUsed
+                            && x.ExpiredAt > DateTime.UtcNow)
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefaultAsync();
+        }
+
+        public async Task<int> CountOtpSentInLastSecondsAsync(string email, int seconds)
+        {
+            var fromTime = DateTime.UtcNow.AddSeconds(-seconds);
+
+            return await _context.EmailOtps
+                .Where(x => x.Email == email && x.CreatedAt >= fromTime)
+                .CountAsync();
+        }
     }
 }

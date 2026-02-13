@@ -53,6 +53,30 @@ namespace JSEA_Presentation.Controllers
             });
         }
 
+        // ================= REGISTER - RESEND OTP =================
+        [HttpPost("register/resend-otp")]
+        public async Task<IActionResult> ResendRegisterOtp(
+            [FromBody] RegisterEmailRequest request
+        )
+        {
+            try
+            {
+                await _emailOtpService.ResendRegisterOtpAsync(request.Email);
+
+                return Ok(new
+                {
+                    message = "OTP đã được gửi lại!"
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    message = ex.Message
+                });
+            }
+        }
+
         // ================= REGISTER - STEP 2 =================
         // Verify OTP
         [HttpPost("register/verify-otp")]

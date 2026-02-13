@@ -12,5 +12,6 @@ namespace JSEA_Application.Interfaces.Auth
         Task<bool> VerifyOtpAsync(string email, string otp);
         Task<string> VerifyOtpAndGenerateRegisterTokenAsync(string otp);
 
+        Task ResendRegisterOtpAsync(string email);
     }
 }
