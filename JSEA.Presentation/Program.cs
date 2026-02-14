@@ -1,9 +1,11 @@
-﻿using JSEA_Application.Interfaces.Auth;
+using JSEA_Application.Interfaces.Auth;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Services.Auth;
 using JSEA_Infrastructure;
 using JSEA_Infrastructure.Repositories;
 using JSEA_Application.Enums;
+using JSEA_Presentation.Services;
+using PayOS;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -46,6 +48,10 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
 builder.Services.AddScoped<IEmailOtpRepository, EmailOtpRepository>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+// PayOS
+builder.Services.Configure<PayOSOptions>(builder.Configuration.GetSection("PayOS"));
+builder.Services.AddScoped<IPayOSPaymentService, PayOSPaymentService>();
 #endregion
 
 #region Controllers + JSON Enum as string
