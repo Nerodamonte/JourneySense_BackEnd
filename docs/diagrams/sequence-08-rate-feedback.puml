@@ -1,0 +1,84 @@
+@startuml Rate & Feedback - Mark as Visited, Upload Photos, Write Feedback, Earn Reward Point
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam linetype ortho
+
+actor Traveler
+participant "ExperienceDetailPage\n<<UI>>" as ExpUI
+participant "ExperienceController\n<<controller>>" as ExpController
+participant "ExperienceService\n<<service>>" as ExpService
+participant "VisitRepository\n<<repository>>" as VisitRepo
+participant "RatingRepository\n<<repository>>" as RatingRepo
+participant "FeedbackRepository\n<<repository>>" as FeedbackRepo
+participant "RewardService\n<<service>>" as RewardService
+database "JSEADatabase" as DB
+
+== Mark as visited & rate, feedback ==
+Traveler -> ExpUI : 1. submitVisitWithFeedback(experienceId, journeyId, rating, feedbackText, photoUrls)
+activate ExpUI
+ExpUI -> ExpController : 2. POST /experiences/{id}/visit(visitRequest)
+activate ExpController
+ExpController -> ExpService : 3. createVisitWithFeedback(visitRequest)
+activate ExpService
+
+ExpService -> VisitRepo : 4. existsVisit(travelerId, experienceId, journeyId)
+activate VisitRepo
+VisitRepo -> DB : 5. SELECT FROM Visit
+DB --> VisitRepo : 5.1 result
+deactivate DB
+VisitRepo --> ExpService : 4.1 exists
+deactivate VisitRepo
+
+alt [4.1 already visited]
+    ExpService --> ExpController : 3.1 validationError("Already visited")
+    deactivate ExpService
+    ExpController --> ExpUI : 2.1 showValidationErrors()
+    deactivate ExpController
+    ExpUI --> Traveler : 1.1 displayError()
+    deactivate ExpUI
+else [4.1 not visited]
+    ExpService -> VisitRepo : 6. saveVisit(visit)
+    activate VisitRepo
+    VisitRepo -> DB : 7. INSERT Visit
+    DB --> VisitRepo : 7.1 insertResult
+    deactivate DB
+    VisitRepo --> ExpService : 6.1 visit
+    deactivate VisitRepo
+
+    ExpService -> RewardService : 8. addRewardPoints(travelerId, points, "mark_visited")
+    activate RewardService
+    RewardService -> DB : 9. UPDATE UserProfile SET reward_points
+    DB --> RewardService : 9.1 updateResult
+    deactivate DB
+    RewardService --> ExpService : 8.1 pointsAdded
+    deactivate RewardService
+
+    opt [has rating]
+        ExpService -> RatingRepo : 10. saveRating(rating)
+        activate RatingRepo
+        RatingRepo -> DB : 11. INSERT Rating
+        DB --> RatingRepo : 11.1 insertResult
+        deactivate DB
+        RatingRepo --> ExpService : 10.1 rating
+        deactivate RatingRepo
+    end
+
+    opt [has feedback or photos]
+        ExpService -> FeedbackRepo : 12. saveFeedback(feedback)
+        activate FeedbackRepo
+        FeedbackRepo -> DB : 13. INSERT Feedback
+        DB --> FeedbackRepo : 13.1 insertResult
+        deactivate DB
+        FeedbackRepo --> ExpService : 12.1 feedback
+        deactivate FeedbackRepo
+    end
+
+    ExpService --> ExpController : 3.2 visitCreated(visit)
+    deactivate ExpService
+    ExpController --> ExpUI : 2.2 visitResponse(visit)
+    deactivate ExpController
+    ExpUI --> Traveler : 1.2 displayThankYou()
+    deactivate ExpUI
+end
+@enduml

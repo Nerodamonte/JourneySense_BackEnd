@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using JSEA_Application.Models;
 using Microsoft.EntityFrameworkCore;
@@ -396,6 +396,7 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("user_profiles_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.RewardPoints).HasDefaultValue(0);
 
             entity.HasOne(d => d.User)
                 .WithOne(p => p.UserProfile)

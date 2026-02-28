@@ -1,0 +1,96 @@
+@startuml Class Diagram - Share Journey (Use Case 9)
+!theme plain
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 30
+
+top to bottom direction
+
+package "Presentation" {
+  class JourneyController <<controller>> {
+    - _journeyShareService : IJourneyShareService
+    --
+    + ShareJourney(request : ShareJourneyRequest) : ShareJourneyResponse
+  }
+}
+
+package "Application" {
+  interface IJourneyShareService <<service>> {
+    + ShareJourney(request : ShareJourneyRequest) : ShareJourneyResponse
+  }
+
+  class JourneyShareService <<service>> {
+    - _journeyRepository : IJourneyRepository
+    - _rewardService : IRewardService
+    --
+    + ShareJourney(request : ShareJourneyRequest) : ShareJourneyResponse
+  }
+
+  interface IJourneyRepository <<repository>> {
+    + GetById(id : Guid) : Journey
+  }
+
+  interface IRewardService <<service>> {
+    + AddRewardPoints(userId : Guid, points : int, reason : string) : void
+  }
+
+  class RewardService <<service>> {
+    + AddRewardPoints(userId : Guid, points : int, reason : string) : void
+  }
+}
+
+package "Infrastructure" {
+  class JourneyRepository <<repository>> {
+    - _context : AppDbContext
+    --
+    + GetById(id : Guid) : Journey
+  }
+}
+
+package "DTOs" {
+  class ShareJourneyRequest <<DTO>> {
+    + JourneyId : Guid
+    + ShareChannel : string
+  }
+
+  class ShareJourneyResponse <<DTO>> {
+    + JourneyId : Guid
+    + ShareLink : string
+    + PointsEarned : int
+  }
+}
+
+package "Domain" {
+  class Journey <<entity>> {
+    + Id : Guid
+    + TimeBudgetMinutes : int
+    + Status : JourneyStatus
+  }
+
+  class User <<entity>> {
+    + Id : Guid
+    + Email : string
+  }
+}
+
+' Relationships
+JourneyController --> IJourneyShareService
+JourneyController ..> ShareJourneyRequest
+JourneyController ..> ShareJourneyResponse
+
+JourneyShareService ..|> IJourneyShareService
+JourneyShareService --> IJourneyRepository
+JourneyShareService --> IRewardService
+JourneyShareService ..> ShareJourneyRequest
+JourneyShareService ..> ShareJourneyResponse
+
+JourneyRepository ..|> IJourneyRepository
+JourneyRepository --> Journey
+
+RewardService ..|> IRewardService
+
+Journey "*" --> "1" User : traveler
+
+@enduml

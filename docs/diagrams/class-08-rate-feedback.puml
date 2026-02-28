@@ -1,0 +1,148 @@
+@startuml Class Diagram - Rate & Feedback (Use Case 8)
+!theme plain
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 30
+
+top to bottom direction
+
+package "Presentation" {
+  class ExperienceController <<controller>> {
+    - _rateFeedbackService : IRateFeedbackService
+    --
+    + SubmitVisitFeedback(request : VisitFeedbackRequest) : VisitFeedbackResponse
+  }
+}
+
+package "Application" {
+  interface IRateFeedbackService <<service>> {
+    + CreateVisitWithFeedback(request : VisitFeedbackRequest) : VisitFeedbackResponse
+  }
+
+  class RateFeedbackService <<service>> {
+    - _visitRepository : IVisitRepository
+    - _ratingRepository : IRatingRepository
+    - _feedbackRepository : IFeedbackRepository
+    - _rewardService : IRewardService
+    --
+    + CreateVisitWithFeedback(request : VisitFeedbackRequest) : VisitFeedbackResponse
+  }
+
+  interface IRewardService <<service>> {
+    + AddRewardPoints(userId : Guid, points : int, reason : string) : void
+  }
+
+  class RewardService <<service>> {
+    + AddRewardPoints(userId : Guid, points : int, reason : string) : void
+  }
+
+  interface IVisitRepository <<repository>> {
+    + ExistsVisit(travelerId : Guid, experienceId : Guid, journeyId : Guid) : bool
+    + Save(visit : Visit) : Visit
+  }
+
+  interface IRatingRepository <<repository>> {
+    + Save(rating : Rating) : Rating
+  }
+
+  interface IFeedbackRepository <<repository>> {
+    + Save(feedback : Feedback) : Feedback
+  }
+}
+
+package "Infrastructure" {
+  class VisitRepository <<repository>> {
+    - _context : AppDbContext
+    --
+    + ExistsVisit(...) : bool
+    + Save(visit : Visit) : Visit
+  }
+
+  class RatingRepository <<repository>> {
+    - _context : AppDbContext
+    --
+    + Save(rating : Rating) : Rating
+  }
+
+  class FeedbackRepository <<repository>> {
+    - _context : AppDbContext
+    --
+    + Save(feedback : Feedback) : Feedback
+  }
+}
+
+package "DTOs" {
+  class VisitFeedbackRequest <<DTO>> {
+    + ExperienceId : Guid
+    + JourneyId : Guid
+    + RatingValue : int
+    + FeedbackText : string
+    + PhotoUrls : List<string>
+  }
+
+  class VisitFeedbackResponse <<DTO>> {
+    + VisitId : Guid
+    + RatingId : Guid
+    + FeedbackId : Guid
+    + PointsEarned : int
+  }
+}
+
+package "Domain" {
+  class Visit <<entity>> {
+    + Id : Guid
+    + VisitedAt : DateTime
+    + ActualDurationMinutes : int
+  }
+
+  class Rating <<entity>> {
+    + Id : Guid
+    + RatingValue : int
+    + CreatedAt : DateTime
+  }
+
+  class Feedback <<entity>> {
+    + Id : Guid
+    + FeedbackText : string
+    + IsApproved : bool
+  }
+
+  class MicroExperience <<entity>> {
+    + Id : Guid
+    + Name : string
+  }
+
+  class User <<entity>> {
+    + Id : Guid
+    + Email : string
+  }
+}
+
+' Relationships
+ExperienceController --> IRateFeedbackService
+
+RateFeedbackService ..|> IRateFeedbackService
+RateFeedbackService --> IVisitRepository
+RateFeedbackService --> IRatingRepository
+RateFeedbackService --> IFeedbackRepository
+RateFeedbackService --> IRewardService
+
+RewardService ..|> IRewardService
+
+VisitRepository ..|> IVisitRepository
+RatingRepository ..|> IRatingRepository
+FeedbackRepository ..|> IFeedbackRepository
+
+ExperienceController ..> VisitFeedbackRequest
+ExperienceController ..> VisitFeedbackResponse
+IRateFeedbackService ..> VisitFeedbackRequest
+IRateFeedbackService ..> VisitFeedbackResponse
+
+Visit "1" --> "0..1" Rating
+Visit "1" --> "0..1" Feedback
+Visit "*" --> "1" MicroExperience : experience
+Visit "*" --> "1" User : traveler
+
+@enduml

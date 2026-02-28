@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -40,6 +40,9 @@ public partial class UserProfile
     [Column("department")]
     [StringLength(100)]
     public string? Department { get; set; }
+
+    [Column("reward_points")]
+    public int RewardPoints { get; set; }
 
     [Column("permissions", TypeName = "jsonb")]
     public string? Permissions { get; set; }

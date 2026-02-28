@@ -1,0 +1,7 @@
+{
+  "originAddress": "1 Công xã Paris, Bến Nghé, Quận 1, TP.HCM",
+  "destinationAddress": "Bưu điện Trung tâm Sài Gòn, Quận 1, TP.HCM",
+  "vehicleType": 3,
+  "timeBudgetMinutes": 60,
+  "maxDetourDistanceMeters": 2000
+}

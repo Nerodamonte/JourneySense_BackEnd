@@ -1,0 +1,51 @@
+@startuml 12b - Create Micro-Experience
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam linetype ortho
+
+actor "Operation Staff" as OpStaff
+participant "MicroExpManagementPage\n<<UI>>" as MicroUI
+participant "MicroExperienceController\n<<controller>>" as MicroController
+participant "MicroExperienceService\n<<service>>" as MicroService
+participant "MicroExperienceRepository\n<<repository>>" as MicroRepo
+database "JSEADatabase" as DB
+
+OpStaff -> MicroUI : 1. createMicroExperience(formData)
+activate MicroUI
+MicroUI -> MicroController : 2. POST /micro-experiences(createRequest)
+activate MicroController
+MicroController -> MicroService : 3. createMicroExperience(createRequest)
+activate MicroService
+
+MicroService -> MicroRepo : 4. existsBySlug(slug)
+activate MicroRepo
+MicroRepo -> DB : 5. SELECT slug
+DB --> MicroRepo : 5.1 result
+MicroRepo --> MicroService : 4.1 exists
+deactivate MicroRepo
+
+alt [4.1 slug exists]
+    MicroService --> MicroController : 3.1 validationError("Slug exists")
+    deactivate MicroService
+    MicroController --> MicroUI : 2.1 showValidationErrors()
+    deactivate MicroController
+    MicroUI --> OpStaff : 1.1 displayError()
+    deactivate MicroUI
+else [4.1 slug available]
+    MicroService -> MicroRepo : 6. save(microExperience)
+    activate MicroRepo
+    MicroRepo -> DB : 7. INSERT micro_experiences
+    DB --> MicroRepo : 7.1 insertResult
+    MicroRepo --> MicroService : 6.1 microExperience
+    deactivate DB
+    deactivate MicroRepo
+
+    MicroService --> MicroController : 3.2 created(microExperience)
+    deactivate MicroService
+    MicroController --> MicroUI : 2.2 createResponse(microExperience)
+    deactivate MicroController
+    MicroUI --> OpStaff : 1.2 showCreated()
+    deactivate MicroUI
+end
+@enduml

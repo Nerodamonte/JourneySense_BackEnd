@@ -1,0 +1,120 @@
+@startuml Class Diagram - Journey Setup (Use Case 7)
+!theme plain
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 30
+
+top to bottom direction
+
+package "Presentation" {
+  class JourneyController <<controller>> {
+    - _journeyService : IJourneyService
+    --
+    + SetupJourney(request : JourneySetupRequest) : JourneySetupResponse
+  }
+}
+
+package "Application" {
+  interface IJourneyService <<service>> {
+    + ValidateAndCreateJourney(request : JourneySetupRequest) : Journey
+  }
+
+  class JourneyService <<service>> {
+    - _journeyRepository : IJourneyRepository
+    - _goongMapsService : IGoongMapsService
+    --
+    + ValidateAndCreateJourney(request : JourneySetupRequest) : Journey
+  }
+
+  interface IGoongMapsService <<service>> {
+    + AnalyzeRouteContext(...) : RouteContext
+  }
+
+  class GoongMapsService <<service>> {
+    + AnalyzeRouteContext(...) : RouteContext
+  }
+
+  interface IJourneyRepository <<repository>> {
+    + Save(journey : Journey, waypoints : List<JourneyWaypoint>) : Journey
+    + GetById(id : Guid) : Journey
+  }
+}
+
+package "Infrastructure" {
+  class JourneyRepository <<repository>> {
+    - _context : AppDbContext
+    --
+    + Save(...) : Journey
+    + GetById(id : Guid) : Journey
+  }
+}
+
+package "DTOs" {
+  class JourneySetupRequest <<DTO>> {
+    + OriginAddress : string
+    + DestinationAddress : string
+    + VehicleType : VehicleType
+    + TimeBudgetMinutes : int
+    + MaxDetourDistanceMeters : int
+  }
+
+  class JourneySetupResponse <<DTO>> {
+    + JourneyId : Guid
+    + Status : JourneyStatus
+    + Summary : string
+  }
+
+  class RouteContext <<DTO>> {
+    + RoutePath : LineString
+    + TotalDistanceMeters : int
+    + EstimatedDurationMinutes : int
+  }
+}
+
+package "Domain" {
+  class Journey <<entity>> {
+    + Id : Guid
+    + OriginAddress : string
+    + DestinationAddress : string
+    + VehicleType : VehicleType
+    + TimeBudgetMinutes : int
+    + MaxDetourDistanceMeters : int
+    + Status : JourneyStatus
+  }
+
+  class JourneyWaypoint <<entity>> {
+    + Id : Guid
+    + StopOrder : int
+    + Address : string
+  }
+
+  class User <<entity>> {
+    + Id : Guid
+    + Email : string
+    + Role : UserRole
+  }
+}
+
+' Relationships - order influences layout
+JourneyController --> IJourneyService
+JourneyController ..> JourneySetupRequest
+JourneyController ..> JourneySetupResponse
+
+JourneyService ..|> IJourneyService
+JourneyService --> IJourneyRepository
+JourneyService --> IGoongMapsService
+JourneyService ..> JourneySetupRequest
+JourneyService ..> Journey
+
+GoongMapsService ..|> IGoongMapsService
+GoongMapsService ..> RouteContext
+
+JourneyRepository ..|> IJourneyRepository
+JourneyRepository --> Journey
+JourneyRepository --> JourneyWaypoint
+
+Journey "1" *-- "0..*" JourneyWaypoint : waypoints
+Journey "*" --> "1" User : traveler
+@enduml

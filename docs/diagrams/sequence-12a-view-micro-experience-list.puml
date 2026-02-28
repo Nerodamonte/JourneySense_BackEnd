@@ -1,0 +1,33 @@
+@startuml 12a - View Micro-Experience List
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+skinparam linetype ortho
+
+actor "Operation Staff" as OpStaff
+participant "MicroExpManagementPage\n<<UI>>" as MicroUI
+participant "MicroExperienceController\n<<controller>>" as MicroController
+participant "MicroExperienceService\n<<service>>" as MicroService
+participant "MicroExperienceRepository\n<<repository>>" as MicroRepo
+database "JSEADatabase" as DB
+
+OpStaff -> MicroUI : 1. openMicroExperienceList()
+activate MicroUI
+MicroUI -> MicroController : 2. GET /micro-experiences
+activate MicroController
+MicroController -> MicroService : 3. getList(filters)
+activate MicroService
+MicroService -> MicroRepo : 4. findAll(filters)
+activate MicroRepo
+MicroRepo -> DB : 5. SELECT FROM micro_experiences
+DB --> MicroRepo : 5.1 result
+deactivate DB
+MicroRepo --> MicroService : 4.1 list
+deactivate MicroRepo
+MicroService --> MicroController : 3.1 microExperiences
+deactivate MicroService
+MicroController --> MicroUI : 2.1 listResponse
+deactivate MicroController
+MicroUI --> OpStaff : 1.1 showList()
+deactivate MicroUI
+@enduml

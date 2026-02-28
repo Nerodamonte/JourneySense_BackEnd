@@ -1,0 +1,10 @@
+{
+  "experienceId": "00000000-0000-0000-0000-000000000001",
+  "journeyId": "00000000-0000-0000-0000-000000000002",
+  "ratingValue": 5,
+  "feedbackText": "Trải nghiệm tuyệt vời, view đẹp và nhân viên thân thiện.",
+  "photoUrls": [
+    "https://example.com/photos/photo1.jpg",
+    "https://example.com/photos/photo2.jpg"
+  ]
+}

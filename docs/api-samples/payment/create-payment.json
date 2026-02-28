@@ -1,0 +1,17 @@
+{
+  "totalAmount": 100000,
+  "description": "Thanh toán gói trải nghiệm JourneySense",
+  "returnUrl": "https://yourapp.com/payment/success",
+  "cancelUrl": "https://yourapp.com/payment/cancel",
+  "buyerName": "Nguyễn Văn A",
+  "buyerEmail": "buyer@example.com",
+  "buyerPhone": "0901234567",
+  "items": [
+    {
+      "name": "Gói trải nghiệm 1 ngày",
+      "quantity": 1,
+      "price": 100000,
+      "unit": "gói"
+    }
+  ]
+}

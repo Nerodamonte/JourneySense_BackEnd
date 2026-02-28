@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using JSEA_Presentation.Swagger;
 
 using Npgsql;
 using System.Text;
@@ -23,6 +24,9 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+
+// Geography/Geometry (Point, etc.) cho MicroExperience.Location, Journey, ...
+dataSourceBuilder.UseNetTopologySuite();
 
 // PostgreSQL enum ↔ C# enum
 dataSourceBuilder.MapEnum<UserRole>("user_role");
@@ -48,6 +52,27 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
 builder.Services.AddScoped<IEmailOtpRepository, EmailOtpRepository>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+// Micro-Experience
+builder.Services.AddScoped<IMicroExperienceService, JSEA_Application.Services.MicroExperience.MicroExperienceService>();
+builder.Services.AddScoped<IMicroExperienceRepository, MicroExperienceRepository>();
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+
+// Journey Setup (Goong Maps)
+builder.Services.AddHttpClient();
+builder.Services.Configure<JSEA_Infrastructure.Services.Goong.GoongOptions>(
+    builder.Configuration.GetSection(JSEA_Infrastructure.Services.Goong.GoongOptions.SectionName));
+builder.Services.AddScoped<IGoongMapsService, JSEA_Infrastructure.Services.Goong.GoongMapsService>();
+builder.Services.AddScoped<IJourneyService, JSEA_Application.Services.Journey.JourneyService>();
+builder.Services.AddScoped<IJourneyRepository, JourneyRepository>();
+
+// Rate & Feedback
+builder.Services.AddScoped<IVisitRepository, VisitRepository>();
+builder.Services.AddScoped<IRatingRepository, RatingRepository>();
+builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
+builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
+builder.Services.AddScoped<IRewardService, JSEA_Application.Services.Experience.RewardService>();
+builder.Services.AddScoped<IRateFeedbackService, JSEA_Application.Services.Experience.RateFeedbackService>();
 
 // PayOS
 builder.Services.Configure<PayOSOptions>(builder.Configuration.GetSection("PayOS"));
@@ -136,6 +161,8 @@ builder.Services.AddSwaggerGen(c =>
         Title = "Journey Sense API",
         Version = "v1"
     });
+
+    c.OperationFilter<SwaggerExamplesOperationFilter>();
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {

@@ -1,0 +1,155 @@
+@startuml Class Diagram - Manage Micro-Experience (Use Case 12)
+!theme plain
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 30
+
+top to bottom direction
+
+package "Presentation" {
+  class MicroExperienceController <<controller>> {
+    - _microExperienceService : IMicroExperienceService
+    --
+    + GetList(filter : MicroExperienceFilter) : List<MicroExperienceListItemDTO>
+    + Create(request : CreateMicroExperienceRequest) : MicroExperienceDetailDTO
+    + Update(id : Guid, request : UpdateMicroExperienceRequest) : MicroExperienceDetailDTO
+    + Delete(id : Guid) : void
+  }
+}
+
+package "Application" {
+  interface IMicroExperienceService <<service>> {
+    + GetList(filter : MicroExperienceFilter) : List<MicroExperienceListItemDTO>
+    + Create(request : CreateMicroExperienceRequest) : MicroExperienceDetailDTO
+    + Update(id : Guid, request : UpdateMicroExperienceRequest) : MicroExperienceDetailDTO
+    + Delete(id : Guid) : void
+  }
+
+  class MicroExperienceService <<service>> {
+    - _microExperienceRepository : IMicroExperienceRepository
+    --
+    + GetList(filter : MicroExperienceFilter) : List<MicroExperienceListItemDTO>
+    + Create(request : CreateMicroExperienceRequest) : MicroExperienceDetailDTO
+    + Update(id : Guid, request : UpdateMicroExperienceRequest) : MicroExperienceDetailDTO
+    + Delete(id : Guid) : void
+  }
+
+  interface IMicroExperienceRepository <<repository>> {
+    + FindAll(filter : MicroExperienceFilter) : List<MicroExperience>
+    + GetById(id : Guid) : MicroExperience
+    + ExistsBySlug(slug : string) : bool
+    + Save(entity : MicroExperience) : MicroExperience
+    + Delete(id : Guid) : void
+  }
+}
+
+package "Infrastructure" {
+  class MicroExperienceRepository <<repository>> {
+    - _context : AppDbContext
+    --
+    + FindAll(filter : MicroExperienceFilter) : List<MicroExperience>
+    + GetById(id : Guid) : MicroExperience
+    + ExistsBySlug(slug : string) : bool
+    + Save(entity : MicroExperience) : MicroExperience
+    + Delete(id : Guid) : void
+  }
+}
+
+package "DTOs" {
+  class MicroExperienceFilter <<DTO>> {
+    + Keyword : string
+    + CategoryId : Guid
+    + Status : ExperienceStatus
+  }
+
+  class MicroExperienceListItemDTO <<DTO>> {
+    + Id : Guid
+    + Name : string
+    + City : string
+    + Status : ExperienceStatus
+  }
+
+  class CreateMicroExperienceRequest <<DTO>> {
+    + Name : string
+    + CategoryId : Guid
+    + Address : string
+    + City : string
+    + Country : string
+  }
+
+  class UpdateMicroExperienceRequest <<DTO>> {
+    + Name : string
+    + CategoryId : Guid
+    + Address : string
+    + Status : ExperienceStatus
+  }
+
+  class MicroExperienceDetailDTO <<DTO>> {
+    + Id : Guid
+    + Name : string
+    + CategoryName : string
+    + Description : string
+    + AvgRating : decimal
+  }
+}
+
+package "Domain" {
+  class MicroExperience <<entity>> {
+    + Id : Guid
+    + Name : string
+    + Slug : string
+    + Status : ExperienceStatus
+  }
+
+  class Category <<entity>> {
+    + Id : Guid
+    + Name : string
+    + Slug : string
+  }
+
+  class ExperienceDetail <<entity>> {
+    + ExperienceId : Guid
+    + Description : string
+    + PriceRange : string
+  }
+
+  class ExperienceMetric <<entity>> {
+    + ExperienceId : Guid
+    + AvgRating : decimal
+    + TotalVisits : int
+  }
+
+  class User <<entity>> {
+    + Id : Guid
+    + Email : string
+    + Role : UserRole
+  }
+}
+
+' Relationships
+MicroExperienceController --> IMicroExperienceService
+MicroExperienceController ..> MicroExperienceFilter
+MicroExperienceController ..> MicroExperienceListItemDTO
+MicroExperienceController ..> CreateMicroExperienceRequest
+MicroExperienceController ..> UpdateMicroExperienceRequest
+MicroExperienceController ..> MicroExperienceDetailDTO
+
+MicroExperienceService ..|> IMicroExperienceService
+MicroExperienceService --> IMicroExperienceRepository
+MicroExperienceService ..> MicroExperienceFilter
+MicroExperienceService ..> MicroExperienceListItemDTO
+MicroExperienceService ..> CreateMicroExperienceRequest
+MicroExperienceService ..> UpdateMicroExperienceRequest
+MicroExperienceService ..> MicroExperienceDetailDTO
+
+MicroExperienceRepository ..|> IMicroExperienceRepository
+MicroExperienceRepository --> MicroExperience
+
+MicroExperience "1" --> "1" Category
+MicroExperience "1" --> "0..1" ExperienceDetail
+MicroExperience "1" --> "0..1" ExperienceMetric
+MicroExperience "*" --> "1" User : uploadedBy
+
+@enduml
