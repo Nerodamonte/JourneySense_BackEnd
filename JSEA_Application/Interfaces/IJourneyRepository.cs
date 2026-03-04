@@ -6,4 +6,5 @@ public interface IJourneyRepository
 {
     Task<Journey> SaveAsync(Journey journey, List<JourneyWaypoint> waypoints, CancellationToken cancellationToken = default);
     Task<Journey?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<List<Journey>> GetByTravelerIdAsync(Guid travelerId, CancellationToken cancellationToken = default);
 }

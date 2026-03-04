@@ -12,13 +12,13 @@ package "Presentation" {
   class ExperienceController <<controller>> {
     - _rateFeedbackService : IRateFeedbackService
     --
-    + SubmitVisitFeedback(request : VisitFeedbackRequest) : VisitFeedbackResponse
+    + SubmitVisitFeedback(request : VisitFeedbackRequest) : IActionResult
   }
 }
 
 package "Application" {
   interface IRateFeedbackService <<service>> {
-    + CreateVisitWithFeedback(request : VisitFeedbackRequest) : VisitFeedbackResponse
+    + CreateVisitWithFeedbackAsync(request : VisitFeedbackRequest, travelerId : Guid, ct?) : Task<VisitFeedbackResponse?>
   }
 
   class RateFeedbackService <<service>> {
@@ -27,28 +27,28 @@ package "Application" {
     - _feedbackRepository : IFeedbackRepository
     - _rewardService : IRewardService
     --
-    + CreateVisitWithFeedback(request : VisitFeedbackRequest) : VisitFeedbackResponse
+    + CreateVisitWithFeedbackAsync(request : VisitFeedbackRequest, travelerId : Guid, ct?) : Task<VisitFeedbackResponse?>
   }
 
   interface IRewardService <<service>> {
-    + AddRewardPoints(userId : Guid, points : int, reason : string) : void
+    + AddRewardPointsAsync(userId : Guid, points : int, reason : string, ct?) : Task
   }
 
   class RewardService <<service>> {
-    + AddRewardPoints(userId : Guid, points : int, reason : string) : void
+    + AddRewardPointsAsync(userId : Guid, points : int, reason : string, ct?) : Task
   }
 
   interface IVisitRepository <<repository>> {
-    + ExistsVisit(travelerId : Guid, experienceId : Guid, journeyId : Guid) : bool
-    + Save(visit : Visit) : Visit
+    + ExistsVisitAsync(travelerId : Guid, experienceId : Guid, journeyId : Guid, ct?) : Task<bool>
+    + SaveAsync(visit : Visit, ct?) : Task<Visit>
   }
 
   interface IRatingRepository <<repository>> {
-    + Save(rating : Rating) : Rating
+    + SaveAsync(rating : Rating, ct?) : Task<Rating>
   }
 
   interface IFeedbackRepository <<repository>> {
-    + Save(feedback : Feedback) : Feedback
+    + SaveAsync(feedback : Feedback, ct?) : Task<Feedback>
   }
 }
 
@@ -56,20 +56,20 @@ package "Infrastructure" {
   class VisitRepository <<repository>> {
     - _context : AppDbContext
     --
-    + ExistsVisit(...) : bool
-    + Save(visit : Visit) : Visit
+    + ExistsVisitAsync(...) : Task<bool>
+    + SaveAsync(visit : Visit, ct?) : Task<Visit>
   }
 
   class RatingRepository <<repository>> {
     - _context : AppDbContext
     --
-    + Save(rating : Rating) : Rating
+    + SaveAsync(rating : Rating, ct?) : Task<Rating>
   }
 
   class FeedbackRepository <<repository>> {
     - _context : AppDbContext
     --
-    + Save(feedback : Feedback) : Feedback
+    + SaveAsync(feedback : Feedback, ct?) : Task<Feedback>
   }
 }
 
@@ -93,20 +93,31 @@ package "DTOs" {
 package "Domain" {
   class Visit <<entity>> {
     + Id : Guid
-    + VisitedAt : DateTime
-    + ActualDurationMinutes : int
+    + TravelerId : Guid?
+    + ExperienceId : Guid?
+    + JourneyId : Guid?
+    + VisitedAt : DateTime?
+    + ActualDurationMinutes : int?
+    + PhotoUrls : List<string>?
   }
 
   class Rating <<entity>> {
     + Id : Guid
-    + RatingValue : int
-    + CreatedAt : DateTime
+    + VisitId : Guid?
+    + TravelerId : Guid?
+    + ExperienceId : Guid?
+    + Rating1 : int?
+    + CreatedAt : DateTime?
   }
 
   class Feedback <<entity>> {
     + Id : Guid
-    + FeedbackText : string
-    + IsApproved : bool
+    + VisitId : Guid?
+    + TravelerId : Guid?
+    + ExperienceId : Guid?
+    + FeedbackText : string?
+    + IsApproved : bool?
+    + IsFlagged : bool?
   }
 
   class MicroExperience <<entity>> {

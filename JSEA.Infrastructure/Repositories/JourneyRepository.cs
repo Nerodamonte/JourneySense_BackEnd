@@ -26,14 +26,13 @@ public class JourneyRepository : IJourneyRepository
             _context.Journeys.Update(journey);
         }
 
-        foreach (var wp in waypoints)
+        foreach (var wp in waypoints.Where(w => w.ExperienceId != Guid.Empty))
         {
             if (wp.Id == Guid.Empty)
                 wp.Id = Guid.NewGuid();
             wp.JourneyId = journey.Id;
+            _context.JourneyWaypoints.Add(wp);
         }
-
-        _context.JourneyWaypoints.AddRange(waypoints);
         await _context.SaveChangesAsync(cancellationToken);
         return journey;
     }
@@ -43,5 +42,14 @@ public class JourneyRepository : IJourneyRepository
         return await _context.Journeys
             .Include(j => j.JourneyWaypoints.OrderBy(w => w.StopOrder))
             .FirstOrDefaultAsync(j => j.Id == id, cancellationToken);
+    }
+
+    public async Task<List<Journey>> GetByTravelerIdAsync(Guid travelerId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Journeys
+            .AsNoTracking()
+            .Where(j => j.TravelerId == travelerId)
+            .OrderByDescending(j => j.CreatedAt)
+            .ToListAsync(cancellationToken);
     }
 }

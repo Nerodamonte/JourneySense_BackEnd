@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -37,5 +37,5 @@ public partial class Category
     public bool? IsActive { get; set; }
 
     [InverseProperty("Category")]
-    public virtual ICollection<MicroExperience> MicroExperiences { get; set; } = new List<MicroExperience>();
+    public virtual ICollection<Experience> Experiences { get; set; } = new List<Experience>();
 }

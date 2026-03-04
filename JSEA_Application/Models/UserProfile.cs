@@ -28,12 +28,6 @@ public partial class UserProfile
     [Column("bio")]
     public string? Bio { get; set; }
 
-    [InverseProperty("UserProfile")]
-    public virtual ICollection<UserVibe> UserVibes { get; set; } = new List<UserVibe>();
-
-    [Column("interests")]
-    public List<string>? Interests { get; set; }
-
     [Column("accessibility_needs")]
     public string? AccessibilityNeeds { get; set; }
 
@@ -41,13 +35,13 @@ public partial class UserProfile
     [StringLength(100)]
     public string? Department { get; set; }
 
-    [Column("reward_points")]
-    public int RewardPoints { get; set; }
-
     [Column("permissions", TypeName = "jsonb")]
     public string? Permissions { get; set; }
 
     [ForeignKey("UserId")]
     [InverseProperty("UserProfile")]
     public virtual User User { get; set; } = null!;
+
+    [InverseProperty("UserProfile")]
+    public virtual ICollection<UserVibe> UserVibes { get; set; } = new List<UserVibe>();
 }

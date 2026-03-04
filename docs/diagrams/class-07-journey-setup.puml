@@ -3,42 +3,66 @@
 
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
-skinparam nodesep 40
-skinparam ranksep 30
+skinparam nodesep 15
+skinparam ranksep 25
+skinparam classFontSize 11
 
 top to bottom direction
 
+' ===== CORE FLOW (vertical stack) =====
 package "Presentation" {
   class JourneyController <<controller>> {
     - _journeyService : IJourneyService
     --
-    + SetupJourney(request : JourneySetupRequest) : JourneySetupResponse
+    + SetupJourney(request) : JourneySetupResponse
+    + GetMyJourneys() : List<JourneyListItemResponse>
+    + GetById(id) : JourneyDetailResponse
+    + GetSuggestionsAlongRoute(id, limit?, weather?, timeOfDay?) : List<RouteMicroExperienceSuggestionResponse>
   }
 }
 
 package "Application" {
   interface IJourneyService <<service>> {
-    + ValidateAndCreateJourney(request : JourneySetupRequest) : Journey
+    + ValidateAndCreateJourneyAsync(request, travelerId?, ct?) : Task<JourneySetupResponse?>
+    + GetMyJourneysAsync(travelerId?, ct?) : Task<List<JourneyListItemResponse>>
+    + GetByIdAsync(id, ct?) : Task<JourneyDetailResponse?>
+    + GetSuggestionsAlongRouteAsync(journeyId, limit?, weather?, timeOfDay?, ct?) : Task<List<RouteMicroExperienceSuggestionResponse>>
   }
 
   class JourneyService <<service>> {
     - _journeyRepository : IJourneyRepository
     - _goongMapsService : IGoongMapsService
+    - _microExperienceRepository : IMicroExperienceRepository
+    - _weatherService : IWeatherService
     --
-    + ValidateAndCreateJourney(request : JourneySetupRequest) : Journey
+    + ValidateAndCreateJourneyAsync(...) : Task<JourneySetupResponse?>
+    + GetMyJourneysAsync(...) : Task<List<JourneyListItemResponse>>
+    + GetByIdAsync(...) : Task<JourneyDetailResponse?>
+    + GetSuggestionsAlongRouteAsync(...) : Task<List<RouteMicroExperienceSuggestionResponse>>
   }
 
   interface IGoongMapsService <<service>> {
-    + AnalyzeRouteContext(...) : RouteContext
+    + AnalyzeRouteContextAsync(origin, dest, vehicleType, timeBudget, detour, ct?) : Task<RouteContext?>
+    + GeocodeAddressToPointAsync(address, ct?) : Task<Point?>
   }
 
   class GoongMapsService <<service>> {
-    + AnalyzeRouteContext(...) : RouteContext
+    + AnalyzeRouteContextAsync(...) : Task<RouteContext?>
+    + GeocodeAddressToPointAsync(...) : Task<Point?>
   }
 
   interface IJourneyRepository <<repository>> {
-    + Save(journey : Journey, waypoints : List<JourneyWaypoint>) : Journey
-    + GetById(id : Guid) : Journey
+    + SaveAsync(journey, waypoints, ct?) : Task<Journey>
+    + GetByIdAsync(id, ct?) : Task<Journey?>
+    + GetByTravelerIdAsync(travelerId, ct?) : Task<List<Journey>>
+  }
+
+  interface IMicroExperienceRepository <<repository>> {
+    + FindSuggestionsAlongRouteAsync(journeyId, limit, weather?, timeOfDay?, ct?) : Task<List<RouteMicroExperienceSuggestionResponse>>
+  }
+
+  interface IWeatherService <<service>> {
+    + GetCurrentWeatherAsync(lat, lon, ct?) : Task<CurrentWeatherResponse?>
   }
 }
 
@@ -46,33 +70,13 @@ package "Infrastructure" {
   class JourneyRepository <<repository>> {
     - _context : AppDbContext
     --
-    + Save(...) : Journey
-    + GetById(id : Guid) : Journey
+    + SaveAsync(...) : Task<Journey>
+    + GetByIdAsync(id, ct?) : Task<Journey?>
+    + GetByTravelerIdAsync(travelerId, ct?) : Task<List<Journey>>
   }
 }
 
-package "DTOs" {
-  class JourneySetupRequest <<DTO>> {
-    + OriginAddress : string
-    + DestinationAddress : string
-    + VehicleType : VehicleType
-    + TimeBudgetMinutes : int
-    + MaxDetourDistanceMeters : int
-  }
-
-  class JourneySetupResponse <<DTO>> {
-    + JourneyId : Guid
-    + Status : JourneyStatus
-    + Summary : string
-  }
-
-  class RouteContext <<DTO>> {
-    + RoutePath : LineString
-    + TotalDistanceMeters : int
-    + EstimatedDurationMinutes : int
-  }
-}
-
+' ===== DOMAIN =====
 package "Domain" {
   class Journey <<entity>> {
     + Id : Guid
@@ -97,14 +101,71 @@ package "Domain" {
   }
 }
 
-' Relationships - order influences layout
+' ===== DTOs (simplified - key attributes only) =====
+package "DTOs" {
+  class JourneySetupRequest <<DTO>> {
+    + OriginAddress : string
+    + DestinationAddress : string
+    + VehicleType : VehicleType
+    + CurrentMood : MoodType?
+    + TimeBudgetMinutes : int
+    + MaxDetourDistanceMeters : int
+    + MaxStopCount : int
+    + PreferredStopDurationMinutes : int?
+  }
+
+  class JourneySetupResponse <<DTO>> {
+    + JourneyId : Guid
+    + Status : JourneyStatus
+    + Summary : string
+    + OriginAddress : string?
+    + DestinationAddress : string?
+  }
+
+  class RouteContext <<DTO>> {
+    + RoutePath : LineString?
+    + TotalDistanceMeters : int
+    + EstimatedDurationMinutes : int
+    + OriginLocation : Point?
+    + DestinationLocation : Point?
+  }
+
+  class JourneyListItemResponse <<DTO>> {
+    + Id : Guid
+    + OriginAddress : string?
+    + DestinationAddress : string?
+    + Status : JourneyStatus?
+  }
+
+  class JourneyDetailResponse <<DTO>> {
+    + Id : Guid
+    + TravelerId : Guid?
+    + OriginAddress : string?
+    + DestinationAddress : string?
+    + Status : JourneyStatus?
+  }
+
+  class RouteMicroExperienceSuggestionResponse <<DTO>> {
+    + Id : Guid
+    + Name : string?
+    + DetourDistanceMeters : int
+    + EstimatedStopMinutes : int
+  }
+}
+
+' ===== RELATIONSHIPS =====
 JourneyController --> IJourneyService
 JourneyController ..> JourneySetupRequest
 JourneyController ..> JourneySetupResponse
+JourneyController ..> JourneyListItemResponse
+JourneyController ..> JourneyDetailResponse
+JourneyController ..> RouteMicroExperienceSuggestionResponse
 
 JourneyService ..|> IJourneyService
 JourneyService --> IJourneyRepository
 JourneyService --> IGoongMapsService
+JourneyService --> IMicroExperienceRepository
+JourneyService --> IWeatherService
 JourneyService ..> JourneySetupRequest
 JourneyService ..> Journey
 

@@ -95,6 +95,23 @@ public class GoongMapsService : IGoongMapsService
         };
     }
 
+    public async Task<Point?> GeocodeAddressToPointAsync(string address, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+            return null;
+
+        var client = _httpClientFactory.CreateClient();
+        var key = _options.ApiKey;
+        if (string.IsNullOrWhiteSpace(key))
+            return null;
+
+        var coord = await GeocodeAsync(client, key, address.Trim(), cancellationToken);
+        if (coord == null)
+            return null;
+
+        return new Point(coord.Value.lng, coord.Value.lat) { SRID = 4326 };
+    }
+
     private async Task<(double lat, double lng)?> GeocodeAsync(
         HttpClient client,
         string apiKey,

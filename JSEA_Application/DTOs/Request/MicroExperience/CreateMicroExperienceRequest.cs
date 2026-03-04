@@ -19,4 +19,20 @@ public class CreateMicroExperienceRequest
 
     [StringLength(100)]
     public string? Country { get; set; }
+
+    /// <summary>Phương tiện có thể tiếp cận: walking, bicycle, motorbike, car.</summary>
+    [Required(ErrorMessage = "Phương tiện tiếp cận không được để trống")]
+    public List<string> AccessibleBy { get; set; } = new();
+
+    /// <summary>Khung giờ phù hợp (Morning, Afternoon, Evening, Night).</summary>
+    public List<string>? PreferredTimes { get; set; }
+
+    /// <summary>Thời tiết phù hợp (Sunny, Cloudy, Rainy).</summary>
+    public List<string>? WeatherSuitability { get; set; }
+
+    /// <summary>Mùa phù hợp.</summary>
+    public List<string>? Seasonality { get; set; }
+
+    /// <summary>Factor IDs (vibe/mood) từ bảng factors - tag cho experience.</summary>
+    public List<Guid>? FactorIds { get; set; }
 }

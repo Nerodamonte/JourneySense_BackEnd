@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace JSEA_Application.Models;
 
 [Table("system_configs")]
-[Index("ConfigKey", Name = "system_configs_config_key_key", IsUnique = true)]
+[Index("ConfigKey", Name = "system_configs_key", IsUnique = true)]
 public partial class SystemConfig
 {
     [Key]
@@ -29,4 +29,7 @@ public partial class SystemConfig
 
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
+
+    [ForeignKey("UpdatedByUserId")]
+    public virtual User? UpdatedByUser { get; set; }
 }

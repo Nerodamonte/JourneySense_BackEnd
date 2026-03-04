@@ -1,26 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace JSEA_Application.Models;
+
 [Table("user_vibes")]
 public partial class UserVibe
 {
+    [Key]
     [Column("user_profile_id")]
     public Guid UserProfileId { get; set; }
 
-    [Column("travel_style_id")]
-    public Guid TravelStyleId { get; set; }
+    [Key]
+    [Column("factor_id")]
+    public Guid FactorId { get; set; }
 
     [Column("selected_at")]
     public DateTime SelectedAt { get; set; } = DateTime.UtcNow;
 
     [ForeignKey("UserProfileId")]
+    [InverseProperty("UserVibes")]
     public virtual UserProfile UserProfile { get; set; } = null!;
 
-    [ForeignKey("TravelStyleId")]
-    public virtual TravelStyle TravelStyle { get; set; } = null!;
+    [ForeignKey("FactorId")]
+    [InverseProperty("UserVibes")]
+    public virtual Factor Factor { get; set; } = null!;
 }

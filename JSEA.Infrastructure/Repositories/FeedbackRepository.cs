@@ -18,7 +18,6 @@ public class FeedbackRepository : IFeedbackRepository
         {
             feedback.Id = Guid.NewGuid();
             feedback.CreatedAt ??= DateTime.UtcNow;
-            feedback.IsApproved ??= true;
             _context.Feedbacks.Add(feedback);
         }
         else

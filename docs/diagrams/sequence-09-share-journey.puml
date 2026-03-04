@@ -4,6 +4,7 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 skinparam linetype ortho
 
+
 actor Traveler
 participant "JourneyDetailPage\n<<UI>>" as JourneyUI
 participant "JourneyController\n<<controller>>" as JourneyController
@@ -15,6 +16,7 @@ database "JSEADatabase" as DB
 == Share journey ==
 Traveler -> JourneyUI : 1. shareJourney(journeyId, shareChannel)
 activate JourneyUI
+activate Traveler
 JourneyUI -> JourneyController : 2. POST /journeys/{id}/share(shareRequest)
 activate JourneyController
 JourneyController -> ShareService : 3. shareJourney(journeyId, travelerId, shareChannel)
@@ -23,22 +25,24 @@ activate ShareService
 ShareService -> JourneyRepo : 4. getById(journeyId)
 activate JourneyRepo
 JourneyRepo -> DB : 5. SELECT Journey, JourneyWaypoints
+activate DB
 DB --> JourneyRepo : 5.1 result
 deactivate DB
 JourneyRepo --> ShareService : 4.1 journey
 deactivate JourneyRepo
 
-alt [4.1 journey not found]
+alt journey not found
     ShareService --> JourneyController : 3.1 notFound()
-    deactivate ShareService
+
     JourneyController --> JourneyUI : 2.1 showError()
-    deactivate JourneyController
+
     JourneyUI --> Traveler : 1.1 displayError()
-    deactivate JourneyUI
-else [4.1 journey found]
+
+else journey found
     ShareService -> RewardService : 5. addRewardPoints(travelerId, points, "share_journey")
     activate RewardService
     RewardService -> DB : 6. UPDATE UserProfile SET reward_points
+    activate DB
     DB --> RewardService : 6.1 updateResult
     deactivate DB
     RewardService --> ShareService : 5.1 pointsAdded
@@ -50,5 +54,6 @@ else [4.1 journey found]
     deactivate JourneyController
     JourneyUI --> Traveler : 1.2 displayShareSuccess(shareLink)
     deactivate JourneyUI
+    deactivate Traveler
 end
 @enduml

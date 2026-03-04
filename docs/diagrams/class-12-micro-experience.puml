@@ -12,36 +12,50 @@ package "Presentation" {
   class MicroExperienceController <<controller>> {
     - _microExperienceService : IMicroExperienceService
     --
-    + GetList(filter : MicroExperienceFilter) : List<MicroExperienceListItemDTO>
-    + Create(request : CreateMicroExperienceRequest) : MicroExperienceDetailDTO
-    + Update(id : Guid, request : UpdateMicroExperienceRequest) : MicroExperienceDetailDTO
-    + Delete(id : Guid) : void
+    + GetList(filter : MicroExperienceFilter) : List<MicroExperienceListItemResponse>
+    + GetById(id : Guid) : MicroExperienceDetailResponse
+    + Create(request : CreateMicroExperienceRequest) : MicroExperienceDetailResponse
+    + Update(id : Guid, request : UpdateMicroExperienceRequest) : MicroExperienceDetailResponse
+    + Delete(id : Guid) : IActionResult
   }
 }
 
 package "Application" {
   interface IMicroExperienceService <<service>> {
-    + GetList(filter : MicroExperienceFilter) : List<MicroExperienceListItemDTO>
-    + Create(request : CreateMicroExperienceRequest) : MicroExperienceDetailDTO
-    + Update(id : Guid, request : UpdateMicroExperienceRequest) : MicroExperienceDetailDTO
-    + Delete(id : Guid) : void
+    + GetListAsync(filter : MicroExperienceFilter, ct?) : Task<List<MicroExperienceListItemResponse>>
+    + GetByIdAsync(id : Guid, ct?) : Task<MicroExperienceDetailResponse?>
+    + CreateAsync(request : CreateMicroExperienceRequest, ct?) : Task<MicroExperienceDetailResponse?>
+    + UpdateAsync(id : Guid, request : UpdateMicroExperienceRequest, ct?) : Task<MicroExperienceDetailResponse?>
+    + DeleteAsync(id : Guid, ct?) : Task<bool>
   }
 
   class MicroExperienceService <<service>> {
-    - _microExperienceRepository : IMicroExperienceRepository
+    - _repository : IMicroExperienceRepository
+    - _categoryRepository : ICategoryRepository
+    - _goongMapsService : IGoongMapsService
     --
-    + GetList(filter : MicroExperienceFilter) : List<MicroExperienceListItemDTO>
-    + Create(request : CreateMicroExperienceRequest) : MicroExperienceDetailDTO
-    + Update(id : Guid, request : UpdateMicroExperienceRequest) : MicroExperienceDetailDTO
-    + Delete(id : Guid) : void
+    + GetListAsync(...) : Task<List<MicroExperienceListItemResponse>>
+    + GetByIdAsync(...) : Task<MicroExperienceDetailResponse?>
+    + CreateAsync(...) : Task<MicroExperienceDetailResponse?>
+    + UpdateAsync(...) : Task<MicroExperienceDetailResponse?>
+    + DeleteAsync(...) : Task<bool>
   }
 
   interface IMicroExperienceRepository <<repository>> {
-    + FindAll(filter : MicroExperienceFilter) : List<MicroExperience>
-    + GetById(id : Guid) : MicroExperience
-    + ExistsBySlug(slug : string) : bool
-    + Save(entity : MicroExperience) : MicroExperience
-    + Delete(id : Guid) : void
+    + FindAllAsync(filter : MicroExperienceFilter, ct?) : Task<List<MicroExperience>>
+    + GetByIdAsync(id : Guid, ct?) : Task<MicroExperience?>
+    + ExistsBySlugAsync(slug : string, ct?) : Task<bool>
+    + SaveAsync(entity : MicroExperience, ct?) : Task<MicroExperience>
+    + DeleteAsync(id : Guid, ct?) : Task
+    + FindSuggestionsAlongRouteAsync(journeyId : Guid, limit : int, weather?, timeOfDay?, ct?) : Task<List<RouteMicroExperienceSuggestionResponse>>
+  }
+
+  interface ICategoryRepository <<repository>> {
+    + ExistsAsync(categoryId : Guid, ct?) : Task<bool>
+  }
+
+  interface IGoongMapsService <<service>> {
+    + GeocodeAddressToPointAsync(address : string, ct?) : Task<Point?>
   }
 }
 
@@ -49,49 +63,69 @@ package "Infrastructure" {
   class MicroExperienceRepository <<repository>> {
     - _context : AppDbContext
     --
-    + FindAll(filter : MicroExperienceFilter) : List<MicroExperience>
-    + GetById(id : Guid) : MicroExperience
-    + ExistsBySlug(slug : string) : bool
-    + Save(entity : MicroExperience) : MicroExperience
-    + Delete(id : Guid) : void
+    + FindAllAsync(...) : Task<List<MicroExperience>>
+    + GetByIdAsync(id : Guid, ct?) : Task<MicroExperience?>
+    + ExistsBySlugAsync(slug : string, ct?) : Task<bool>
+    + SaveAsync(entity : MicroExperience, ct?) : Task<MicroExperience>
+    + DeleteAsync(id : Guid, ct?) : Task
+    + FindSuggestionsAlongRouteAsync(...) : Task<List<RouteMicroExperienceSuggestionResponse>>
   }
 }
 
 package "DTOs" {
   class MicroExperienceFilter <<DTO>> {
-    + Keyword : string
-    + CategoryId : Guid
-    + Status : ExperienceStatus
+    + Keyword : string?
+    + CategoryId : Guid?
+    + Status : ExperienceStatus?
+    + Mood : MoodType?
+    + TimeOfDay : TimeOfDay?
   }
 
-  class MicroExperienceListItemDTO <<DTO>> {
+  class MicroExperienceListItemResponse <<DTO>> {
     + Id : Guid
-    + Name : string
-    + City : string
-    + Status : ExperienceStatus
+    + Name : string?
+    + City : string?
+    + Status : ExperienceStatus?
+    + SuitableMoods : List<string>?
+    + PreferredTimes : List<string>?
+    + Latitude : double?
+    + Longitude : double?
   }
 
   class CreateMicroExperienceRequest <<DTO>> {
     + Name : string
     + CategoryId : Guid
-    + Address : string
-    + City : string
-    + Country : string
+    + Address : string?
+    + City : string?
+    + Country : string?
+    + SuitableMoods : List<string>?
+    + PreferredTimes : List<string>?
   }
 
   class UpdateMicroExperienceRequest <<DTO>> {
     + Name : string
     + CategoryId : Guid
-    + Address : string
+    + Address : string?
     + Status : ExperienceStatus
+    + SuitableMoods : List<string>?
+    + PreferredTimes : List<string>?
   }
 
-  class MicroExperienceDetailDTO <<DTO>> {
+  class MicroExperienceDetailResponse <<DTO>> {
     + Id : Guid
-    + Name : string
-    + CategoryName : string
-    + Description : string
+    + Name : string?
+    + CategoryName : string?
+    + Description : string?
     + AvgRating : decimal
+    + Status : ExperienceStatus?
+    + Address : string?
+    + City : string?
+    + Country : string?
+    + SuitableMoods : List<string>?
+    + PreferredTimes : List<string>?
+    + WeatherSuitability : List<string>?
+    + Latitude : double?
+    + Longitude : double?
   }
 }
 
@@ -131,18 +165,20 @@ package "Domain" {
 ' Relationships
 MicroExperienceController --> IMicroExperienceService
 MicroExperienceController ..> MicroExperienceFilter
-MicroExperienceController ..> MicroExperienceListItemDTO
+MicroExperienceController ..> MicroExperienceListItemResponse
 MicroExperienceController ..> CreateMicroExperienceRequest
 MicroExperienceController ..> UpdateMicroExperienceRequest
-MicroExperienceController ..> MicroExperienceDetailDTO
+MicroExperienceController ..> MicroExperienceDetailResponse
 
 MicroExperienceService ..|> IMicroExperienceService
 MicroExperienceService --> IMicroExperienceRepository
+MicroExperienceService --> ICategoryRepository
+MicroExperienceService --> IGoongMapsService
 MicroExperienceService ..> MicroExperienceFilter
-MicroExperienceService ..> MicroExperienceListItemDTO
+MicroExperienceService ..> MicroExperienceListItemResponse
 MicroExperienceService ..> CreateMicroExperienceRequest
 MicroExperienceService ..> UpdateMicroExperienceRequest
-MicroExperienceService ..> MicroExperienceDetailDTO
+MicroExperienceService ..> MicroExperienceDetailResponse
 
 MicroExperienceRepository ..|> IMicroExperienceRepository
 MicroExperienceRepository --> MicroExperience

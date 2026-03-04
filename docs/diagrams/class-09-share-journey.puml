@@ -1,5 +1,6 @@
 @startuml Class Diagram - Share Journey (Use Case 9)
 !theme plain
+' **[PLANNED]** Feature not yet implemented in codebase
 
 skinparam classAttributeIconSize 0
 skinparam linetype ortho
@@ -18,26 +19,26 @@ package "Presentation" {
 
 package "Application" {
   interface IJourneyShareService <<service>> {
-    + ShareJourney(request : ShareJourneyRequest) : ShareJourneyResponse
+    + ShareJourneyAsync(request : ShareJourneyRequest, travelerId : Guid, ct?) : Task<ShareJourneyResponse?>
   }
 
   class JourneyShareService <<service>> {
     - _journeyRepository : IJourneyRepository
     - _rewardService : IRewardService
     --
-    + ShareJourney(request : ShareJourneyRequest) : ShareJourneyResponse
+    + ShareJourneyAsync(request : ShareJourneyRequest, travelerId : Guid, ct?) : Task<ShareJourneyResponse?>
   }
 
   interface IJourneyRepository <<repository>> {
-    + GetById(id : Guid) : Journey
+    + GetByIdAsync(id : Guid, ct?) : Task<Journey?>
   }
 
   interface IRewardService <<service>> {
-    + AddRewardPoints(userId : Guid, points : int, reason : string) : void
+    + AddRewardPointsAsync(userId : Guid, points : int, reason : string, ct?) : Task
   }
 
   class RewardService <<service>> {
-    + AddRewardPoints(userId : Guid, points : int, reason : string) : void
+    + AddRewardPointsAsync(userId : Guid, points : int, reason : string, ct?) : Task
   }
 }
 
@@ -45,7 +46,7 @@ package "Infrastructure" {
   class JourneyRepository <<repository>> {
     - _context : AppDbContext
     --
-    + GetById(id : Guid) : Journey
+    + GetByIdAsync(id : Guid, ct?) : Task<Journey?>
   }
 }
 

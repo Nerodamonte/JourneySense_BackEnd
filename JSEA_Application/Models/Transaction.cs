@@ -1,7 +1,6 @@
-﻿using JSEA_Application.Enums;
+using JSEA_Application.Enums;
 using Microsoft.EntityFrameworkCore;
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -15,21 +14,24 @@ public partial class Transaction
     public Guid Id { get; set; }
 
     [Column("user_id")]
-    public Guid? UserId { get; set; }
+    public Guid UserId { get; set; }
+
+    [Column("package_id")]
+    public Guid PackageId { get; set; }
 
     [Column("amount")]
-    public long? Amount { get; set; }
+    public long Amount { get; set; }
 
     [Column("type")]
     [StringLength(50)]
-    public TransactionType Type { get; set; }
+    public string Type { get; set; } = null!; // purchase | renewal | upgrade
 
     [Column("status")]
     [StringLength(50)]
-    public TransactionStatus Status { get; set; }
+    public string Status { get; set; } = null!; // pending | completed | failed | refunded
 
     [Column("item_snapshot", TypeName = "jsonb")]
-    public string? ItemSnapshot { get; set; }
+    public string ItemSnapshot { get; set; } = null!;
 
     [Column("payment_method")]
     [StringLength(50)]
@@ -38,7 +40,11 @@ public partial class Transaction
     [Column("created_at")]
     public DateTime? CreatedAt { get; set; }
 
+    [ForeignKey("PackageId")]
+    [InverseProperty("Transactions")]
+    public virtual Package Package { get; set; } = null!;
+
     [ForeignKey("UserId")]
     [InverseProperty("Transactions")]
-    public virtual User? User { get; set; }
+    public virtual User User { get; set; } = null!;
 }

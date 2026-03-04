@@ -12,6 +12,7 @@ participant "MicroExperienceRepository\n<<repository>>" as MicroRepo
 database "JSEADatabase" as DB
 
 OpStaff -> MicroUI : 1. openMicroExperienceList()
+activate OpStaff
 activate MicroUI
 MicroUI -> MicroController : 2. GET /micro-experiences
 activate MicroController
@@ -20,6 +21,7 @@ activate MicroService
 MicroService -> MicroRepo : 4. findAll(filters)
 activate MicroRepo
 MicroRepo -> DB : 5. SELECT FROM micro_experiences
+activate DB
 DB --> MicroRepo : 5.1 result
 deactivate DB
 MicroRepo --> MicroService : 4.1 list
@@ -30,4 +32,5 @@ MicroController --> MicroUI : 2.1 listResponse
 deactivate MicroController
 MicroUI --> OpStaff : 1.1 showList()
 deactivate MicroUI
+deactivate OpStaff
 @enduml

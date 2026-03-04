@@ -1,29 +1,12 @@
 using JSEA_Application.Interfaces;
-using JSEA_Application.Models;
 
 namespace JSEA_Application.Services.Experience;
 
+/// <summary>Schema v10 không có reward_points trong user_profiles. Service này tạm no-op.</summary>
 public class RewardService : IRewardService
 {
-    private readonly IUserProfileRepository _userProfileRepository;
-
-    public RewardService(IUserProfileRepository userProfileRepository)
+    public Task AddRewardPointsAsync(Guid userId, int points, string reason, CancellationToken cancellationToken = default)
     {
-        _userProfileRepository = userProfileRepository;
-    }
-
-    public async Task AddRewardPointsAsync(Guid userId, int points, string reason, CancellationToken cancellationToken = default)
-    {
-        if (points <= 0) return;
-
-        var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
-        if (profile == null)
-        {
-            profile = new UserProfile { UserId = userId, RewardPoints = points };
-            await _userProfileRepository.CreateAsync(profile, cancellationToken);
-            return;
-        }
-        profile.RewardPoints += points;
-        await _userProfileRepository.UpdateAsync(profile, cancellationToken);
+        return Task.CompletedTask;
     }
 }

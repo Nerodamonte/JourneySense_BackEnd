@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using JSEA_Application.Enums;
 
 namespace JSEA_Application.DTOs.Request.MicroExperience;
 
@@ -15,5 +14,21 @@ public class UpdateMicroExperienceRequest
     [StringLength(500)]
     public string? Address { get; set; }
 
-    public ExperienceStatus Status { get; set; }
+    [StringLength(20)]
+    public string Status { get; set; } = "active"; // active | inactive
+
+    /// <summary>Phương tiện có thể tiếp cận: walking, bicycle, motorbike, car.</summary>
+    public List<string>? AccessibleBy { get; set; }
+
+    /// <summary>Khung giờ phù hợp (Morning, Afternoon, Evening, Night).</summary>
+    public List<string>? PreferredTimes { get; set; }
+
+    /// <summary>Thời tiết phù hợp (Sunny, Cloudy, Rainy).</summary>
+    public List<string>? WeatherSuitability { get; set; }
+
+    /// <summary>Mùa phù hợp.</summary>
+    public List<string>? Seasonality { get; set; }
+
+    /// <summary>Factor IDs (vibe/mood) từ bảng factors - tag cho experience.</summary>
+    public List<Guid>? FactorIds { get; set; }
 }

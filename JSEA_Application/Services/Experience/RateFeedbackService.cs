@@ -48,8 +48,6 @@ public class RateFeedbackService : IRateFeedbackService
             var rating = new Rating
             {
                 VisitId = visit.Id,
-                TravelerId = travelerId,
-                ExperienceId = request.ExperienceId,
                 Rating1 = request.RatingValue
             };
             rating = await _ratingRepository.SaveAsync(rating, cancellationToken);
@@ -62,9 +60,7 @@ public class RateFeedbackService : IRateFeedbackService
             var feedback = new Feedback
             {
                 VisitId = visit.Id,
-                TravelerId = travelerId,
-                ExperienceId = request.ExperienceId,
-                FeedbackText = request.FeedbackText?.Trim()
+                FeedbackText = request.FeedbackText?.Trim() ?? ""
             };
             feedback = await _feedbackRepository.SaveAsync(feedback, cancellationToken);
             feedbackId = feedback.Id;

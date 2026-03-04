@@ -24,14 +24,18 @@ public class MicroExperienceController : ControllerBase
     public async Task<IActionResult> GetList(
         [FromQuery] string? keyword,
         [FromQuery] Guid? categoryId,
-        [FromQuery] JSEA_Application.Enums.ExperienceStatus? status,
+        [FromQuery] string? status,
+        [FromQuery] string? mood,
+        [FromQuery] string? timeOfDay,
         CancellationToken cancellationToken)
     {
         var filter = new MicroExperienceFilter
         {
             Keyword = keyword,
             CategoryId = categoryId,
-            Status = status
+            Status = status,
+            Mood = mood,
+            TimeOfDay = timeOfDay
         };
         var list = await _microExperienceService.GetListAsync(filter, cancellationToken);
         return Ok(list);
@@ -66,7 +70,7 @@ public class MicroExperienceController : ControllerBase
 
         var result = await _microExperienceService.CreateAsync(request, cancellationToken);
         if (result == null)
-            return BadRequest(new { message = "Danh mục không tồn tại hoặc slug đã tồn tại. Kiểm tra categoryId và tên trải nghiệm." });
+            return BadRequest(new { message = "Danh mục không tồn tại, slug đã tồn tại, hoặc địa chỉ không tìm thấy trên bản đồ (Goong). Kiểm tra categoryId, tên và địa chỉ (Address, City, Country)." });
 
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
@@ -88,7 +92,7 @@ public class MicroExperienceController : ControllerBase
 
         var result = await _microExperienceService.UpdateAsync(id, request, cancellationToken);
         if (result == null)
-            return BadRequest(new { message = "Không tìm thấy trải nghiệm, danh mục không tồn tại hoặc slug mới đã tồn tại." });
+            return BadRequest(new { message = "Không tìm thấy trải nghiệm, danh mục không tồn tại, slug mới đã tồn tại, hoặc địa chỉ không tìm thấy trên bản đồ (Goong)." });
 
         return Ok(result);
     }

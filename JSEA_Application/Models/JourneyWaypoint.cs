@@ -1,9 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
-using NetTopologySuite.Geometries;
 
 namespace JSEA_Application.Models;
 
@@ -15,20 +13,22 @@ public partial class JourneyWaypoint
     public Guid Id { get; set; }
 
     [Column("journey_id")]
-    public Guid? JourneyId { get; set; }
+    public Guid JourneyId { get; set; }
 
     [Column("experience_id")]
-    public Guid? ExperienceId { get; set; }
+    public Guid ExperienceId { get; set; }
 
-    [Column("location", TypeName = "geography(Point,4326)")]
-    public Point? Location { get; set; }
-
-    [Column("address")]
-    [StringLength(500)]
-    public string? Address { get; set; }
+    [Column("suggestion_id")]
+    public Guid? SuggestionId { get; set; }
 
     [Column("stop_order")]
-    public int? StopOrder { get; set; }
+    public int StopOrder { get; set; }
+
+    [Column("planned_stop_minutes")]
+    public int? PlannedStopMinutes { get; set; }
+
+    [Column("actual_stop_minutes")]
+    public int? ActualStopMinutes { get; set; }
 
     [Column("estimated_arrival_at")]
     public DateTime? EstimatedArrivalAt { get; set; }
@@ -36,11 +36,18 @@ public partial class JourneyWaypoint
     [Column("actual_arrival_at")]
     public DateTime? ActualArrivalAt { get; set; }
 
+    [Column("actual_departure_at")]
+    public DateTime? ActualDepartureAt { get; set; }
+
     [ForeignKey("ExperienceId")]
     [InverseProperty("JourneyWaypoints")]
-    public virtual MicroExperience? Experience { get; set; }
+    public virtual Experience Experience { get; set; } = null!;
 
     [ForeignKey("JourneyId")]
     [InverseProperty("JourneyWaypoints")]
-    public virtual Journey? Journey { get; set; }
+    public virtual Journey Journey { get; set; } = null!;
+
+    [ForeignKey("SuggestionId")]
+    [InverseProperty("JourneyWaypoints")]
+    public virtual JourneySuggestion? Suggestion { get; set; }
 }

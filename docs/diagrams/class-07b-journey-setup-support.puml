@@ -1,0 +1,92 @@
+@startuml Class Diagram - Journey Setup Supporting Services (Use Case 7b)
+!theme plain
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 8
+skinparam ranksep 20
+skinparam classFontSize 10
+
+top to bottom direction
+
+' Supporting: GetMyJourneys, GetById, GetSuggestionsAlongRoute
+package "Presentation" {
+  class JourneyController <<controller>> {
+    - _journeyService : IJourneyService
+    --
+    + GetMyJourneys() : List<JourneyListItemResponse>
+    + GetById(id) : JourneyDetailResponse
+    + GetSuggestionsAlongRoute(id, limit?, weather?, timeOfDay?) : List<RouteMicroExperienceSuggestionResponse>
+  }
+}
+
+package "Application" {
+  interface IJourneyService <<service>> {
+    + GetMyJourneysAsync(travelerId?, ct?) : Task<List<JourneyListItemResponse>>
+    + GetByIdAsync(id, ct?) : Task<JourneyDetailResponse?>
+    + GetSuggestionsAlongRouteAsync(journeyId, limit?, weather?, timeOfDay?, ct?) : Task<List<RouteMicroExperienceSuggestionResponse>>
+  }
+
+  class JourneyService <<service>> {
+    - _journeyRepository : IJourneyRepository
+    - _microExperienceRepository : IMicroExperienceRepository
+    - _weatherService : IWeatherService
+    --
+    + GetMyJourneysAsync(...) : Task<List<JourneyListItemResponse>>
+    + GetByIdAsync(...) : Task<JourneyDetailResponse?>
+    + GetSuggestionsAlongRouteAsync(...) : Task<List<RouteMicroExperienceSuggestionResponse>>
+  }
+
+  interface IJourneyRepository <<repository>> {
+    + GetByIdAsync(id, ct?) : Task<Journey?>
+    + GetByTravelerIdAsync(travelerId, ct?) : Task<List<Journey>>
+  }
+
+  interface IMicroExperienceRepository <<repository>> {
+    + FindSuggestionsAlongRouteAsync(journeyId, limit, weather?, timeOfDay?, ct?) : Task<List<RouteMicroExperienceSuggestionResponse>>
+  }
+
+  interface IWeatherService <<service>> {
+    + GetCurrentWeatherAsync(lat, lon, ct?) : Task<CurrentWeatherResponse?>
+  }
+}
+
+package "DTOs" {
+  class JourneyListItemResponse <<DTO>> {
+    + Id : Guid
+    + OriginAddress : string?
+    + DestinationAddress : string?
+    + Status : JourneyStatus?
+  }
+
+  class JourneyDetailResponse <<DTO>> {
+    + Id : Guid
+    + TravelerId : Guid?
+    + OriginAddress : string?
+    + DestinationAddress : string?
+    + Status : JourneyStatus?
+  }
+
+  class RouteMicroExperienceSuggestionResponse <<DTO>> {
+    + Id : Guid
+    + Name : string?
+    + DetourDistanceMeters : int
+    + EstimatedStopMinutes : int
+  }
+}
+
+' Relationships
+JourneyController --> IJourneyService
+JourneyController ..> JourneyListItemResponse
+JourneyController ..> JourneyDetailResponse
+JourneyController ..> RouteMicroExperienceSuggestionResponse
+
+JourneyService ..|> IJourneyService
+JourneyService --> IJourneyRepository
+JourneyService --> IMicroExperienceRepository
+JourneyService --> IWeatherService
+
+JourneyService ..> JourneyListItemResponse
+JourneyService ..> JourneyDetailResponse
+JourneyService ..> RouteMicroExperienceSuggestionResponse
+@enduml

@@ -1,4 +1,4 @@
-﻿using JSEA_Application.Enums;
+using JSEA_Application.Enums;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -16,25 +16,23 @@ public partial class Package
 
     [Column("title")]
     [StringLength(255)]
-    public string? Title { get; set; }
+    public string Title { get; set; } = null!;
 
-    [Column("price")]
-    [Precision(12, 2)]
-    public decimal? Price { get; set; }
+    [Column("price", TypeName = "numeric(12,2)")]
+    public decimal Price { get; set; }
 
-    [Column("sale_price")]
-    [Precision(12, 2)]
+    [Column("sale_price", TypeName = "numeric(12,2)")]
     public decimal? SalePrice { get; set; }
-
-    [Column("benefit", TypeName = "jsonb")]
-    public string? Benefit { get; set; }
-
-    [Column("km")]
-    public int? Km { get; set; }
 
     [Column("type")]
     [StringLength(50)]
-    public PackageType Type { get; set; }
+    public string Type { get; set; } = null!; // basic | pro
+
+    [Column("distance_limit_km")]
+    public int DistanceLimitKm { get; set; }
+
+    [Column("benefit", TypeName = "jsonb")]
+    public string? Benefit { get; set; }
 
     [Column("is_popular")]
     public bool? IsPopular { get; set; }
@@ -47,4 +45,7 @@ public partial class Package
 
     [InverseProperty("Package")]
     public virtual ICollection<UserPackage> UserPackages { get; set; } = new List<UserPackage>();
+
+    [InverseProperty("Package")]
+    public virtual ICollection<Transaction> Transactions { get; set; } = new List<Transaction>();
 }

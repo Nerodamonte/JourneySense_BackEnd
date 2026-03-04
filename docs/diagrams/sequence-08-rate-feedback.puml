@@ -7,7 +7,7 @@ skinparam linetype ortho
 actor Traveler
 participant "ExperienceDetailPage\n<<UI>>" as ExpUI
 participant "ExperienceController\n<<controller>>" as ExpController
-participant "ExperienceService\n<<service>>" as ExpService
+participant "RateFeedbackService\n<<service>>" as ExpService
 participant "VisitRepository\n<<repository>>" as VisitRepo
 participant "RatingRepository\n<<repository>>" as RatingRepo
 participant "FeedbackRepository\n<<repository>>" as FeedbackRepo
@@ -17,30 +17,33 @@ database "JSEADatabase" as DB
 == Mark as visited & rate, feedback ==
 Traveler -> ExpUI : 1. submitVisitWithFeedback(experienceId, journeyId, rating, feedbackText, photoUrls)
 activate ExpUI
-ExpUI -> ExpController : 2. POST /experiences/{id}/visit(visitRequest)
+activate Traveler
+ExpUI -> ExpController : 2. POST /experiences/visit(visitRequest)
 activate ExpController
-ExpController -> ExpService : 3. createVisitWithFeedback(visitRequest)
+ExpController -> ExpService : 3. createVisitWithFeedback(request, travelerId)
 activate ExpService
 
-ExpService -> VisitRepo : 4. existsVisit(travelerId, experienceId, journeyId)
+ExpService -> VisitRepo : 4. existsVisitAsync(travelerId, experienceId, journeyId)
 activate VisitRepo
 VisitRepo -> DB : 5. SELECT FROM Visit
+activate DB
 DB --> VisitRepo : 5.1 result
 deactivate DB
 VisitRepo --> ExpService : 4.1 exists
 deactivate VisitRepo
 
-alt [4.1 already visited]
-    ExpService --> ExpController : 3.1 validationError("Already visited")
-    deactivate ExpService
-    ExpController --> ExpUI : 2.1 showValidationErrors()
-    deactivate ExpController
+alt already visited
+    ExpService --> ExpController : 3.1 conflict(409 "Already visited")
+
+    ExpController --> ExpUI : 2.1 showConflict()
+  
     ExpUI --> Traveler : 1.1 displayError()
-    deactivate ExpUI
-else [4.1 not visited]
-    ExpService -> VisitRepo : 6. saveVisit(visit)
+
+else not visited
+    ExpService -> VisitRepo : 6. saveAsync(visit)
     activate VisitRepo
     VisitRepo -> DB : 7. INSERT Visit
+    activate DB
     DB --> VisitRepo : 7.1 insertResult
     deactivate DB
     VisitRepo --> ExpService : 6.1 visit
@@ -49,25 +52,28 @@ else [4.1 not visited]
     ExpService -> RewardService : 8. addRewardPoints(travelerId, points, "mark_visited")
     activate RewardService
     RewardService -> DB : 9. UPDATE UserProfile SET reward_points
+    activate DB
     DB --> RewardService : 9.1 updateResult
     deactivate DB
     RewardService --> ExpService : 8.1 pointsAdded
     deactivate RewardService
 
-    opt [has rating]
-        ExpService -> RatingRepo : 10. saveRating(rating)
+    opt has rating
+        ExpService -> RatingRepo : 10. saveAsync(rating)
         activate RatingRepo
         RatingRepo -> DB : 11. INSERT Rating
+        activate DB
         DB --> RatingRepo : 11.1 insertResult
         deactivate DB
         RatingRepo --> ExpService : 10.1 rating
         deactivate RatingRepo
     end
 
-    opt [has feedback or photos]
-        ExpService -> FeedbackRepo : 12. saveFeedback(feedback)
+    opt has feedback or photos
+        ExpService -> FeedbackRepo : 12. saveAsync(feedback)
         activate FeedbackRepo
         FeedbackRepo -> DB : 13. INSERT Feedback
+        activate DB
         DB --> FeedbackRepo : 13.1 insertResult
         deactivate DB
         FeedbackRepo --> ExpService : 12.1 feedback
@@ -80,5 +86,6 @@ else [4.1 not visited]
     deactivate ExpController
     ExpUI --> Traveler : 1.2 displayThankYou()
     deactivate ExpUI
+    deactivate Traveler
 end
 @enduml

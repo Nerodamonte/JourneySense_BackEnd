@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
@@ -7,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 namespace JSEA_Application.Models;
 
 [Table("feedbacks")]
-[Index("VisitId", Name = "feedbacks_visit_id_key", IsUnique = true)]
 public partial class Feedback
 {
     [Key]
@@ -15,16 +13,10 @@ public partial class Feedback
     public Guid Id { get; set; }
 
     [Column("visit_id")]
-    public Guid? VisitId { get; set; }
-
-    [Column("traveler_id")]
-    public Guid? TravelerId { get; set; }
-
-    [Column("experience_id")]
-    public Guid? ExperienceId { get; set; }
+    public Guid VisitId { get; set; }
 
     [Column("feedback_text")]
-    public string? FeedbackText { get; set; }
+    public string FeedbackText { get; set; } = null!;
 
     [Column("is_flagged")]
     public bool? IsFlagged { get; set; }
@@ -32,13 +24,10 @@ public partial class Feedback
     [Column("flagged_reason")]
     public string? FlaggedReason { get; set; }
 
-    [Column("is_approved")]
-    public bool? IsApproved { get; set; }
-
     [Column("created_at")]
     public DateTime? CreatedAt { get; set; }
 
     [ForeignKey("VisitId")]
     [InverseProperty("Feedback")]
-    public virtual Visit? Visit { get; set; }
+    public virtual Visit Visit { get; set; } = null!;
 }

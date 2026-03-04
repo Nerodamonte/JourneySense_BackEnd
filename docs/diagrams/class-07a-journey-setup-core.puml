@@ -1,0 +1,117 @@
+@startuml Class Diagram - Journey Setup Core Flow (Use Case 7a)
+!theme plain
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam nodesep 8
+skinparam ranksep 20
+skinparam classFontSize 10
+
+top to bottom direction
+
+' Core flow: SetupJourney only
+package "Presentation" {
+  class JourneyController <<controller>> {
+    - _journeyService : IJourneyService
+    --
+    + SetupJourney(request) : JourneySetupResponse
+  }
+}
+
+package "Application" {
+  interface IJourneyService <<service>> {
+    + ValidateAndCreateJourneyAsync(request, travelerId?, ct?) : Task<JourneySetupResponse?>
+  }
+
+  class JourneyService <<service>> {
+    - _journeyRepository : IJourneyRepository
+    - _goongMapsService : IGoongMapsService
+    --
+    + ValidateAndCreateJourneyAsync(...) : Task<JourneySetupResponse?>
+  }
+
+  interface IGoongMapsService <<service>> {
+    + AnalyzeRouteContextAsync(...) : Task<RouteContext?>
+  }
+
+  class GoongMapsService <<service>> {
+    + AnalyzeRouteContextAsync(...) : Task<RouteContext?>
+  }
+
+  interface IJourneyRepository <<repository>> {
+    + SaveAsync(journey, waypoints, ct?) : Task<Journey>
+  }
+}
+
+package "Infrastructure" {
+  class JourneyRepository <<repository>> {
+    - _context : AppDbContext
+    --
+    + SaveAsync(...) : Task<Journey>
+  }
+}
+
+package "Domain" {
+  class Journey <<entity>> {
+    + Id : Guid
+    + OriginAddress : string
+    + DestinationAddress : string
+    + VehicleType : VehicleType
+    + Status : JourneyStatus
+  }
+
+  class JourneyWaypoint <<entity>> {
+    + Id : Guid
+    + StopOrder : int
+    + Address : string
+  }
+
+  class User <<entity>> {
+    + Id : Guid
+    + Email : string
+  }
+}
+
+package "DTOs" {
+  class JourneySetupRequest <<DTO>> {
+    + OriginAddress : string
+    + DestinationAddress : string
+    + VehicleType : VehicleType
+    + TimeBudgetMinutes : int
+    + MaxDetourDistanceMeters : int
+  }
+
+  class JourneySetupResponse <<DTO>> {
+    + JourneyId : Guid
+    + Status : JourneyStatus
+    + Summary : string
+  }
+
+  class RouteContext <<DTO>> {
+    + RoutePath : LineString?
+    + TotalDistanceMeters : int
+    + EstimatedDurationMinutes : int
+  }
+}
+
+' Relationships
+JourneyController --> IJourneyService
+JourneyController ..> JourneySetupRequest
+JourneyController ..> JourneySetupResponse
+
+JourneyService ..|> IJourneyService
+JourneyService --> IJourneyRepository
+JourneyService --> IGoongMapsService
+JourneyService ..> JourneySetupRequest
+JourneyService ..> Journey
+
+GoongMapsService ..|> IGoongMapsService
+GoongMapsService ..> RouteContext
+
+JourneyRepository ..|> IJourneyRepository
+JourneyRepository --> Journey
+JourneyRepository --> JourneyWaypoint
+
+Journey "1" *-- "0..*" JourneyWaypoint : waypoints
+Journey "*" --> "1" User : traveler
+@enduml

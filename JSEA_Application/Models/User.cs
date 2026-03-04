@@ -1,4 +1,4 @@
-﻿using JSEA_Application.Enums;
+using JSEA_Application.Enums;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -30,11 +30,11 @@ public partial class User
 
     [Column("role")]
     [StringLength(50)]
-    public UserRole Role { get; set; }
+    public string Role { get; set; } = null!; // traveler | staff | admin
 
     [Column("status")]
     [StringLength(50)]
-    public UserStatus Status { get; set; }
+    public string Status { get; set; } = null!; // pending_verification | active | suspended | deleted
 
     [Column("email_verified")]
     public bool? EmailVerified { get; set; }
@@ -57,17 +57,17 @@ public partial class User
     [InverseProperty("User")]
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
-    [InverseProperty("FeaturedByUser")]
-    public virtual ICollection<ExperienceDetail> ExperienceDetailFeaturedByUsers { get; set; } = new List<ExperienceDetail>();
+    [InverseProperty("CreatedByUser")]
+    public virtual ICollection<Experience> Experiences { get; set; } = new List<Experience>();
 
-    [InverseProperty("VerifiedByUser")]
-    public virtual ICollection<ExperienceDetail> ExperienceDetailVerifiedByUsers { get; set; } = new List<ExperienceDetail>();
+    [InverseProperty("CreatedByUser")]
+    public virtual ICollection<ExperiencePhoto> ExperiencePhotos { get; set; } = new List<ExperiencePhoto>();
+
+    [InverseProperty("CreatedByUser")]
+    public virtual ICollection<Event> Events { get; set; } = new List<Event>();
 
     [InverseProperty("Traveler")]
     public virtual ICollection<Journey> Journeys { get; set; } = new List<Journey>();
-
-    [InverseProperty("UploadedByUser")]
-    public virtual ICollection<MicroExperience> MicroExperiences { get; set; } = new List<MicroExperience>();
 
     [InverseProperty("User")]
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();

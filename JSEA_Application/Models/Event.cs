@@ -1,4 +1,4 @@
-﻿using JSEA_Application.Enums;
+using JSEA_Application.Enums;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -15,14 +15,14 @@ public partial class Event
     public Guid Id { get; set; }
 
     [Column("experience_id")]
-    public Guid? ExperienceId { get; set; }
+    public Guid ExperienceId { get; set; }
 
-    [Column("uploaded_by_user_id")]
-    public Guid? UploadedByUserId { get; set; }
+    [Column("created_by_user_id")]
+    public Guid? CreatedByUserId { get; set; }
 
     [Column("title")]
     [StringLength(255)]
-    public string? Title { get; set; }
+    public string Title { get; set; } = null!;
 
     [Column("description")]
     public string? Description { get; set; }
@@ -32,26 +32,29 @@ public partial class Event
     public string? EventType { get; set; }
 
     [Column("start_datetime")]
-    public DateTime? StartDatetime { get; set; }
+    public DateTime StartDatetime { get; set; }
 
     [Column("end_datetime")]
-    public DateTime? EndDatetime { get; set; }
+    public DateTime EndDatetime { get; set; }
 
     [Column("recurrence_pattern")]
     [StringLength(50)]
-    public RecurrencePattern RecurrencePattern { get; set; }
+    public string RecurrencePattern { get; set; } = null!; // once|daily|weekly|monthly|yearly|custom
 
     [Column("recurrence_rule")]
     public string? RecurrenceRule { get; set; }
 
-    [Column("score_boost_factor")]
-    [Precision(3, 2)]
+    [Column("score_boost_factor", TypeName = "numeric(3,2)")]
     public decimal? ScoreBoostFactor { get; set; }
 
-    [InverseProperty("Event")]
-    public virtual ICollection<EventOccurrence> EventOccurrences { get; set; } = new List<EventOccurrence>();
+    [ForeignKey("CreatedByUserId")]
+    [InverseProperty("Events")]
+    public virtual User? CreatedByUser { get; set; }
 
     [ForeignKey("ExperienceId")]
     [InverseProperty("Events")]
-    public virtual MicroExperience? Experience { get; set; }
+    public virtual Experience Experience { get; set; } = null!;
+
+    [InverseProperty("Event")]
+    public virtual ICollection<EventOccurrence> EventOccurrences { get; set; } = new List<EventOccurrence>();
 }

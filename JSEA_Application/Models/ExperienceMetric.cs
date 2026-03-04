@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -31,13 +31,13 @@ public partial class ExperienceMetric
     [Precision(3, 2)]
     public decimal? AcceptanceRate { get; set; }
 
-    [Column("last_visit_date")]
-    public DateTime? LastVisitDate { get; set; }
+    [Column("last_visited_at")]
+    public DateTime? LastVisitedAt { get; set; }
 
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
     [ForeignKey("ExperienceId")]
     [InverseProperty("ExperienceMetric")]
-    public virtual MicroExperience Experience { get; set; } = null!;
+    public virtual Experience Experience { get; set; } = null!;
 }

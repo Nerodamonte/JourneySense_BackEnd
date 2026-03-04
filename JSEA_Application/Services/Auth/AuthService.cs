@@ -1,4 +1,4 @@
-﻿using JSEA_Application.Interfaces;
+using JSEA_Application.Interfaces;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces.Auth;
 using JSEA_Application.DTOs.Respone.Auth;
@@ -33,7 +33,7 @@ public class AuthService : IAuthService
         if (user == null)
             throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng");
 
-        if (user.DeletedAt != null || user.Status != UserStatus.Active)
+        if (user.DeletedAt != null || user.Status != "active")
             throw new UnauthorizedAccessException("Tài khoản không hoạt động");
 
         if (string.IsNullOrEmpty(user.PasswordHash) ||
@@ -49,7 +49,7 @@ public class AuthService : IAuthService
 
         // Update last login
         user.LastLoginAt = DateTime.UtcNow;
-        _userRepository.UpdateAsync(user);
+        await _userRepository.UpdateAsync(user);
 
         return new LoginResponse
         {
@@ -57,7 +57,7 @@ public class AuthService : IAuthService
             Email = user.Email,
             Role = user.Role,
             AccessToken = accessToken,
-            RefreshToken = refreshToken 
+            RefreshToken = refreshToken
         };
     }
 
@@ -110,7 +110,8 @@ public class AuthService : IAuthService
         {
             Id = Guid.NewGuid(),
             Email = email,
-            Status = UserStatus.Active,
+            Role = "traveler",
+            Status = "active",
             CreatedAt = DateTime.UtcNow
         };
 

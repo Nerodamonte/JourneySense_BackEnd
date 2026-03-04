@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using JSEA_Presentation.Swagger;
 
 using Npgsql;
 using System.Text;
@@ -63,6 +62,7 @@ builder.Services.AddHttpClient();
 builder.Services.Configure<JSEA_Infrastructure.Services.Goong.GoongOptions>(
     builder.Configuration.GetSection(JSEA_Infrastructure.Services.Goong.GoongOptions.SectionName));
 builder.Services.AddScoped<IGoongMapsService, JSEA_Infrastructure.Services.Goong.GoongMapsService>();
+builder.Services.AddScoped<IWeatherService, JSEA_Infrastructure.Services.OpenMeteo.OpenMeteoWeatherService>();
 builder.Services.AddScoped<IJourneyService, JSEA_Application.Services.Journey.JourneyService>();
 builder.Services.AddScoped<IJourneyRepository, JourneyRepository>();
 
@@ -162,7 +162,6 @@ builder.Services.AddSwaggerGen(c =>
         Version = "v1"
     });
 
-    c.OperationFilter<SwaggerExamplesOperationFilter>();
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {

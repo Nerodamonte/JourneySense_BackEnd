@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore;
@@ -14,10 +13,16 @@ public partial class UserPackage
     public Guid Id { get; set; }
 
     [Column("user_id")]
-    public Guid? UserId { get; set; }
+    public Guid UserId { get; set; }
 
     [Column("package_id")]
-    public Guid? PackageId { get; set; }
+    public Guid PackageId { get; set; }
+
+    [Column("distance_limit_km")]
+    public int DistanceLimitKm { get; set; }
+
+    [Column("used_km", TypeName = "numeric(10,2)")]
+    public decimal UsedKm { get; set; }
 
     [Column("is_active")]
     public bool? IsActive { get; set; }
@@ -30,9 +35,9 @@ public partial class UserPackage
 
     [ForeignKey("PackageId")]
     [InverseProperty("UserPackages")]
-    public virtual Package? Package { get; set; }
+    public virtual Package Package { get; set; } = null!;
 
     [ForeignKey("UserId")]
     [InverseProperty("UserPackages")]
-    public virtual User? User { get; set; }
+    public virtual User User { get; set; } = null!;
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -14,10 +14,10 @@ public partial class Visit
     public Guid Id { get; set; }
 
     [Column("traveler_id")]
-    public Guid? TravelerId { get; set; }
+    public Guid TravelerId { get; set; }
 
     [Column("experience_id")]
-    public Guid? ExperienceId { get; set; }
+    public Guid ExperienceId { get; set; }
 
     [Column("journey_id")]
     public Guid? JourneyId { get; set; }
@@ -33,7 +33,7 @@ public partial class Visit
 
     [ForeignKey("ExperienceId")]
     [InverseProperty("Visits")]
-    public virtual MicroExperience? Experience { get; set; }
+    public virtual Experience Experience { get; set; } = null!;
 
     [InverseProperty("Visit")]
     public virtual Feedback? Feedback { get; set; }
@@ -47,5 +47,5 @@ public partial class Visit
 
     [ForeignKey("TravelerId")]
     [InverseProperty("Visits")]
-    public virtual User? Traveler { get; set; }
+    public virtual User Traveler { get; set; } = null!;
 }

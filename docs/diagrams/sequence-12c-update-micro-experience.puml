@@ -9,42 +9,132 @@ participant "MicroExpManagementPage\n<<UI>>" as MicroUI
 participant "MicroExperienceController\n<<controller>>" as MicroController
 participant "MicroExperienceService\n<<service>>" as MicroService
 participant "MicroExperienceRepository\n<<repository>>" as MicroRepo
+participant "CategoryRepository\n<<repository>>" as CategoryRepo
+participant "GoongMapsService\n<<service>>" as GoongMaps
 database "JSEADatabase" as DB
 
 OpStaff -> MicroUI : 1. updateMicroExperience(id, formData)
 activate MicroUI
+activate OpStaff
 MicroUI -> MicroController : 2. PUT /micro-experiences/{id}(updateRequest)
 activate MicroController
-MicroController -> MicroService : 3. updateMicroExperience(id, updateRequest)
+MicroController -> MicroService : 3. updateAsync(id, updateRequest)
 activate MicroService
 
-MicroService -> MicroRepo : 4. getById(id)
+MicroService -> MicroRepo : 4. getByIdAsync(id)
 activate MicroRepo
 MicroRepo -> DB : 5. SELECT FROM micro_experiences
+activate DB
 DB --> MicroRepo : 5.1 result
 MicroRepo --> MicroService : 4.1 microExperience
+deactivate MicroRepo
 deactivate DB
 
-alt [4.1 not found]
-    MicroService --> MicroController : 3.1 notFound()
-    deactivate MicroService
+alt not found
+    MicroService --> MicroController : 3.1 badRequest(400)
+ 
     MicroController --> MicroUI : 2.1 showError()
-    deactivate MicroController
+  
     MicroUI --> OpStaff : 1.1 displayError()
-    deactivate MicroUI
-else [4.1 found]
-    MicroService -> MicroRepo : 6. update(microExperience)
-    MicroRepo -> DB : 7. UPDATE micro_experiences
-    DB --> MicroRepo : 7.1 updateResult
-    MicroRepo --> MicroService : 6.1 updated
-    deactivate DB
-    deactivate MicroRepo
 
-    MicroService --> MicroController : 3.2 updated(microExperience)
-    deactivate MicroService
-    MicroController --> MicroUI : 2.2 updateResponse()
-    deactivate MicroController
-    MicroUI --> OpStaff : 1.2 showUpdated()
-    deactivate MicroUI
+else found
+    MicroService -> CategoryRepo : 6. existsAsync(categoryId)
+    activate CategoryRepo
+    CategoryRepo -> DB : 6a. SELECT FROM categories
+    activate DB
+    DB --> CategoryRepo : 6a.1 result
+    deactivate DB
+    CategoryRepo --> MicroService : 6.1 exists
+    deactivate CategoryRepo
+
+    alt category not found
+        MicroService --> MicroController : 3.2 badRequest(400)
+       
+        MicroController --> MicroUI : 2.2 showError()
+      
+        MicroUI --> OpStaff : 1.2 displayError()
+       
+    else category exists
+        alt slug changed
+            MicroService -> MicroRepo : 7. existsBySlugAsync(newSlug)
+            activate MicroRepo
+            MicroRepo -> DB : 7a. SELECT slug
+            activate DB
+            DB --> MicroRepo : 7a.1 result
+            deactivate DB
+            MicroRepo --> MicroService : 7.1 exists
+            deactivate MicroRepo
+
+            alt slug exists
+                MicroService --> MicroController : 3.3 badRequest(400 "Slug exists")
+               
+                MicroController --> MicroUI : 2.3 showError()
+          
+                MicroUI --> OpStaff : 1.3 displayError()
+           
+            else slug available
+                MicroService -> GoongMaps : 8. geocodeAddressToPointAsync(fullAddress)
+                activate GoongMaps
+                GoongMaps --> MicroService : 8.1 location
+                deactivate GoongMaps
+
+                alt address not found
+                    MicroService --> MicroController : 3.4 badRequest(400)
+                 
+                    MicroController --> MicroUI : 2.4 showError()
+                
+                    MicroUI --> OpStaff : 1.4 displayError()
+              
+                else location ok
+                    MicroService -> MicroRepo : 9. saveAsync(microExperience)
+                    activate MicroRepo
+                    MicroRepo -> DB : 10. UPDATE micro_experiences
+                    activate DB
+                    DB --> MicroRepo : 10.1 updateResult
+                    MicroRepo --> MicroService : 9.1 updated
+                    deactivate DB
+                    deactivate MicroRepo
+
+                    MicroService --> MicroController : 3.5 updated(microExperience)
+                    
+                    MicroController --> MicroUI : 2.5 updateResponse()
+                    
+                    MicroUI --> OpStaff : 1.5 showUpdated()
+                   
+                end
+                end
+        else slug not changed
+            MicroService -> GoongMaps : 8. geocodeAddressToPointAsync(fullAddress)
+            activate GoongMaps
+            GoongMaps --> MicroService : 8.1 location
+            deactivate GoongMaps
+
+            alt address not found
+                MicroService --> MicroController : 3.4 badRequest(400)
+            
+                MicroController --> MicroUI : 2.4 showError()
+              
+                MicroUI --> OpStaff : 1.4 displayError()
+           
+            else location ok
+                MicroService -> MicroRepo : 9. saveAsync(microExperience)
+                activate MicroRepo
+                MicroRepo -> DB : 10. UPDATE micro_experiences
+                activate DB
+                DB --> MicroRepo : 10.1 updateResult
+                MicroRepo --> MicroService : 9.1 updated
+                deactivate DB
+                deactivate MicroRepo
+
+                MicroService --> MicroController : 3.5 updated(microExperience)
+                deactivate MicroService
+                MicroController --> MicroUI : 2.5 updateResponse()
+                deactivate MicroController
+                MicroUI --> OpStaff : 1.5 showUpdated()
+                deactivate MicroUI
+                deactivate OpStaff
+            end
+        end
+    end
 end
 @enduml

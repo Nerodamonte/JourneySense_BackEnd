@@ -1,4 +1,4 @@
-﻿using JSEA_Application.Enums;
+using JSEA_Application.Enums;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using System;
@@ -8,30 +8,30 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace JSEA_Application.Models;
 
-[Table("micro_experiences")]
-[Index("Slug", Name = "micro_experiences_slug_key", IsUnique = true)]
-public partial class MicroExperience
+[Table("experiences")]
+[Index("Slug", Name = "experiences_slug_key", IsUnique = true)]
+public partial class Experience
 {
     [Key]
     [Column("id")]
     public Guid Id { get; set; }
 
-    [Column("uploaded_by_user_id")]
-    public Guid? UploadedByUserId { get; set; }
+    [Column("created_by_user_id")]
+    public Guid? CreatedByUserId { get; set; }
 
     [Column("category_id")]
     public Guid? CategoryId { get; set; }
 
     [Column("name")]
     [StringLength(255)]
-    public string? Name { get; set; }
+    public string Name { get; set; } = null!;
 
     [Column("slug")]
     [StringLength(255)]
-    public string? Slug { get; set; }
+    public string Slug { get; set; } = null!;
 
     [Column("location", TypeName = "geography(Point,4326)")]
-    public Point? Location { get; set; }
+    public Point Location { get; set; } = null!;
 
     [Column("address")]
     [StringLength(500)]
@@ -45,24 +45,24 @@ public partial class MicroExperience
     [StringLength(100)]
     public string? Country { get; set; }
 
-    [Column("suitable_moods", TypeName = "character varying(50)[]")]
-    public List<string>? SuitableMoods { get; set; }
+    [Column("accessible_by", TypeName = "character varying(20)[]")]
+    public List<string> AccessibleBy { get; set; } = new(); // walking|bicycle|motorbike|car
 
-    [Column("preferred_times", TypeName = "character varying(50)[]")]
-    public List<string>? PreferredTimes { get; set; }
-
-    [Column("weather_suitability", TypeName = "character varying(50)[]")]
+    [Column("weather_suitability", TypeName = "character varying(20)[]")]
     public List<string>? WeatherSuitability { get; set; }
 
-    [Column("seasonality", TypeName = "character varying(50)[]")]
+    [Column("preferred_times", TypeName = "character varying(20)[]")]
+    public List<string>? PreferredTimes { get; set; }
+
+    [Column("seasonality", TypeName = "character varying(20)[]")]
     public List<string>? Seasonality { get; set; }
 
     [Column("tags")]
     public List<string>? Tags { get; set; }
 
     [Column("status")]
-    [StringLength(50)]
-    public ExperienceStatus? Status { get; set; }
+    [StringLength(20)]
+    public string Status { get; set; } = "active"; // active | inactive
 
     [Column("created_at")]
     public DateTime? CreatedAt { get; set; }
@@ -71,14 +71,21 @@ public partial class MicroExperience
     public DateTime? UpdatedAt { get; set; }
 
     [ForeignKey("CategoryId")]
-    [InverseProperty("MicroExperiences")]
+    [InverseProperty("Experiences")]
     public virtual Category? Category { get; set; }
+
+    [ForeignKey("CreatedByUserId")]
+    [InverseProperty("Experiences")]
+    public virtual User? CreatedByUser { get; set; }
 
     [InverseProperty("Experience")]
     public virtual ICollection<Event> Events { get; set; } = new List<Event>();
 
     [InverseProperty("Experience")]
     public virtual ExperienceDetail? ExperienceDetail { get; set; }
+
+    [InverseProperty("Experience")]
+    public virtual ICollection<ExperienceTag> ExperienceTags { get; set; } = new List<ExperienceTag>();
 
     [InverseProperty("Experience")]
     public virtual ExperienceMetric? ExperienceMetric { get; set; }
@@ -91,10 +98,6 @@ public partial class MicroExperience
 
     [InverseProperty("Experience")]
     public virtual ICollection<JourneyWaypoint> JourneyWaypoints { get; set; } = new List<JourneyWaypoint>();
-
-    [ForeignKey("UploadedByUserId")]
-    [InverseProperty("MicroExperiences")]
-    public virtual User? UploadedByUser { get; set; }
 
     [InverseProperty("Experience")]
     public virtual ICollection<UserFavorite> UserFavorites { get; set; } = new List<UserFavorite>();

@@ -9,43 +9,82 @@ participant "MicroExpManagementPage\n<<UI>>" as MicroUI
 participant "MicroExperienceController\n<<controller>>" as MicroController
 participant "MicroExperienceService\n<<service>>" as MicroService
 participant "MicroExperienceRepository\n<<repository>>" as MicroRepo
+participant "CategoryRepository\n<<repository>>" as CategoryRepo
+participant "GoongMapsService\n<<service>>" as GoongMaps
 database "JSEADatabase" as DB
 
 OpStaff -> MicroUI : 1. createMicroExperience(formData)
+activate OpStaff
 activate MicroUI
 MicroUI -> MicroController : 2. POST /micro-experiences(createRequest)
 activate MicroController
-MicroController -> MicroService : 3. createMicroExperience(createRequest)
+MicroController -> MicroService : 3. createAsync(createRequest)
 activate MicroService
 
-MicroService -> MicroRepo : 4. existsBySlug(slug)
-activate MicroRepo
-MicroRepo -> DB : 5. SELECT slug
-DB --> MicroRepo : 5.1 result
-MicroRepo --> MicroService : 4.1 exists
-deactivate MicroRepo
+MicroService -> CategoryRepo : 4. existsAsync(categoryId)
+activate CategoryRepo
+CategoryRepo -> DB : 4a. SELECT FROM categories
+activate DB
+DB --> CategoryRepo : 4a.1 result
+deactivate DB
+CategoryRepo --> MicroService : 4.1 exists
+deactivate CategoryRepo
 
-alt [4.1 slug exists]
-    MicroService --> MicroController : 3.1 validationError("Slug exists")
-    deactivate MicroService
-    MicroController --> MicroUI : 2.1 showValidationErrors()
-    deactivate MicroController
+alt category not found
+    MicroService --> MicroController : 3.1 badRequest(400)
+  
+    MicroController --> MicroUI : 2.1 showError()
+
     MicroUI --> OpStaff : 1.1 displayError()
-    deactivate MicroUI
-else [4.1 slug available]
-    MicroService -> MicroRepo : 6. save(microExperience)
+ 
+else category exists
+    MicroService -> MicroRepo : 5. existsBySlugAsync(slug)
     activate MicroRepo
-    MicroRepo -> DB : 7. INSERT micro_experiences
-    DB --> MicroRepo : 7.1 insertResult
-    MicroRepo --> MicroService : 6.1 microExperience
+    MicroRepo -> DB : 5a. SELECT slug
+    activate DB
+    DB --> MicroRepo : 5a.1 result
     deactivate DB
+    MicroRepo --> MicroService : 5.1 exists
     deactivate MicroRepo
 
-    MicroService --> MicroController : 3.2 created(microExperience)
-    deactivate MicroService
-    MicroController --> MicroUI : 2.2 createResponse(microExperience)
-    deactivate MicroController
-    MicroUI --> OpStaff : 1.2 showCreated()
-    deactivate MicroUI
+    alt slug exists
+        MicroService --> MicroController : 3.2 badRequest(400 "Slug exists")
+       
+        MicroController --> MicroUI : 2.2 showError()
+
+        MicroUI --> OpStaff : 1.2 displayError()
+
+    else slug available
+        MicroService -> GoongMaps : 6. geocodeAddressToPointAsync(fullAddress)
+        activate GoongMaps
+        GoongMaps --> MicroService : 6.1 location
+        deactivate GoongMaps
+
+        alt address not found
+            MicroService --> MicroController : 3.3 badRequest(400)
+        
+            MicroController --> MicroUI : 2.3 showError()
+         
+            MicroUI --> OpStaff : 1.3 displayError()
+      
+        else location ok
+            MicroService -> MicroRepo : 7. saveAsync(microExperience)
+            activate MicroRepo
+            MicroRepo -> DB : 8. INSERT micro_experiences
+            activate DB
+            DB --> MicroRepo : 8.1 insertResult
+            MicroRepo --> MicroService : 7.1 microExperience
+            deactivate DB
+            deactivate MicroRepo
+
+            MicroService --> MicroController : 3.4 created(microExperience)
+            deactivate MicroService
+            MicroController --> MicroUI : 2.4 createResponse(microExperience)
+            deactivate MicroController
+            MicroUI --> OpStaff : 1.4 showCreated()
+            deactivate MicroUI
+            deactivate OpStaff
+        end
+    end
 end
 @enduml

@@ -13,28 +13,34 @@ database "JSEADatabase" as DB
 
 OpStaff -> MicroUI : 1. deleteMicroExperience(id)
 activate MicroUI
+activate OpStaff
 MicroUI -> MicroController : 2. DELETE /micro-experiences/{id}
 activate MicroController
-MicroController -> MicroService : 3. deleteMicroExperience(id)
+MicroController -> MicroService : 3. deleteAsync(id)
 activate MicroService
 
-MicroService -> MicroRepo : 4. getById(id)
+MicroService -> MicroRepo : 4. getByIdAsync(id)
 activate MicroRepo
 MicroRepo -> DB : 5. SELECT FROM micro_experiences
+activate DB
 DB --> MicroRepo : 5.1 result
 MicroRepo --> MicroService : 4.1 microExperience
 deactivate DB
+deactivate MicroRepo
 
-alt [4.1 not found]
+alt not found
     MicroService --> MicroController : 3.1 notFound()
-    deactivate MicroService
+  
     MicroController --> MicroUI : 2.1 showError()
-    deactivate MicroController
+
     MicroUI --> OpStaff : 1.1 displayError()
-    deactivate MicroUI
-else [4.1 found]
-    MicroService -> MicroRepo : 6. delete(id)
+
+else found
+    
+    MicroService -> MicroRepo : 6. deleteAsync(id)
+    activate MicroRepo
     MicroRepo -> DB : 7. DELETE FROM micro_experiences
+    activate DB
     DB --> MicroRepo : 7.1 deleteResult
     MicroRepo --> MicroService : 6.1 deleted
     deactivate DB
@@ -46,5 +52,6 @@ else [4.1 found]
     deactivate MicroController
     MicroUI --> OpStaff : 1.2 showDeleted()
     deactivate MicroUI
+    deactivate OpStaff
 end
 @enduml

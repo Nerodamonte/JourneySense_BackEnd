@@ -1,5 +1,3 @@
-﻿using JSEA_Application.Enums;
-using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -15,15 +13,15 @@ public partial class Notification
     public Guid Id { get; set; }
 
     [Column("user_id")]
-    public Guid? UserId { get; set; }
+    public Guid UserId { get; set; }
 
     [Column("notification_type")]
     [StringLength(100)]
-    public NotificationType NotificationType { get; set; }
+    public string NotificationType { get; set; } = null!;
 
     [Column("title")]
     [StringLength(255)]
-    public string? Title { get; set; }
+    public string Title { get; set; } = null!;
 
     [Column("message")]
     public string? Message { get; set; }
@@ -45,5 +43,5 @@ public partial class Notification
 
     [ForeignKey("UserId")]
     [InverseProperty("Notifications")]
-    public virtual User? User { get; set; }
+    public virtual User User { get; set; } = null!;
 }
