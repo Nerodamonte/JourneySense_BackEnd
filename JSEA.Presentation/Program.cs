@@ -73,6 +73,7 @@ builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
 builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
 builder.Services.AddScoped<IRewardService, JSEA_Application.Services.Experience.RewardService>();
 builder.Services.AddScoped<IRateFeedbackService, JSEA_Application.Services.Experience.RateFeedbackService>();
+builder.Services.AddScoped<IFactorRepository, FactorRepository>();
 
 // PayOS
 builder.Services.Configure<PayOSOptions>(builder.Configuration.GetSection("PayOS"));
@@ -187,6 +188,23 @@ builder.Services.AddSwaggerGen(c =>
             Array.Empty<string>()
         }
     });
+
+    // Include XML comments from all projects for better Swagger docs (DTO + controller summaries).
+    var xmlFiles = new[]
+    {
+        "JSEA_Presentation.xml",
+        "JSEA_Application.xml",
+        "JSEA_Infrastructure.xml"
+    };
+    var basePath = AppContext.BaseDirectory;
+    foreach (var xml in xmlFiles)
+    {
+        var fullPath = Path.Combine(basePath, xml);
+        if (File.Exists(fullPath))
+        {
+            c.IncludeXmlComments(fullPath, includeControllerXmlComments: true);
+        }
+    }
 });
 
 #endregion

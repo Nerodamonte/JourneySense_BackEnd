@@ -12,4 +12,7 @@ public class GoongOptions
 
     /// <summary>Base URL tùy chỉnh. Nếu set sẽ bỏ qua ApiVersion. Ví dụ: https://rsapi.goong.io/v2</summary>
     public string? BaseUrl { get; set; }
+
+    /// <summary>Số tuyến đường tối đa lấy từ Goong Direction (nếu API trả về nhiều routes). Mặc định 1.</summary>
+    public int MaxRouteAlternatives { get; set; } = 1;
 }

@@ -3,8 +3,12 @@ using JSEA_Application.Enums;
 
 namespace JSEA_Application.DTOs.Request.Journey;
 
+/// <summary>
+/// Request để thiết lập một hành trình mới (journey) từ điểm A → B.
+/// </summary>
 public class JourneySetupRequest
 {
+    /// <summary>Địa chỉ xuất phát (text) mà user nhập, dùng để geocode.</summary>
     [Required(ErrorMessage = "Địa chỉ xuất phát không được để trống")]
     [StringLength(500)]
     public string OriginAddress { get; set; } = null!;
@@ -13,6 +17,7 @@ public class JourneySetupRequest
     [StringLength(500)]
     public string DestinationAddress { get; set; } = null!;
 
+    /// <summary>Phương tiện di chuyển chính (Walking, Bicycle, Motorbike, Car...).</summary>
     public VehicleType VehicleType { get; set; }
 
     /// <summary>Travel vibe / mood cho hành trình (Relax, Photography, Foodie, Adventure, Culture).</summary>
@@ -22,6 +27,7 @@ public class JourneySetupRequest
     [Range(1, 1440, ErrorMessage = "Thời gian dự kiến phải từ 1 đến 1440 phút")]
     public int TimeBudgetMinutes { get; set; }
 
+    /// <summary>Khoảng cách detour tối đa cho các gợi ý Experience (mét).</summary>
     [Range(0, 100_000)]
     public int MaxDetourDistanceMeters { get; set; }
 

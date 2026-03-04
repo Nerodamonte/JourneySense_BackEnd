@@ -7,9 +7,9 @@ namespace JSEA_Application.Interfaces;
 public interface IGoongMapsService
 {
     /// <summary>
-    /// Phân tích tuyến từ địa chỉ đi → đến: geocode, direction, trả về RouteContext.
+    /// Phân tích tuyến từ địa chỉ đi → đến: geocode, direction, trả về danh sách RouteContext (tối đa MaxRouteAlternatives).
     /// </summary>
-    Task<RouteContext?> AnalyzeRouteContextAsync(
+    Task<List<RouteContext>> AnalyzeRouteContextAsync(
         string originAddress,
         string destinationAddress,
         VehicleType vehicleType,

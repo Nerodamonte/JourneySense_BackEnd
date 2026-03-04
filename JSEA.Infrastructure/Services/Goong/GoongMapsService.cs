@@ -27,7 +27,7 @@ public class GoongMapsService : IGoongMapsService
         return $"{DefaultHost}/";
     }
 
-    public async Task<RouteContext?> AnalyzeRouteContextAsync(
+    public async Task<List<RouteContext>> AnalyzeRouteContextAsync(
         string originAddress,
         string destinationAddress,
         VehicleType vehicleType,
@@ -38,15 +38,15 @@ public class GoongMapsService : IGoongMapsService
         var client = _httpClientFactory.CreateClient();
         var key = _options.ApiKey;
         if (string.IsNullOrWhiteSpace(key))
-            return null;
+            return new List<RouteContext>();
 
         // 1. Geocode origin
         var originLoc = await GeocodeAsync(client, key, originAddress, cancellationToken);
-        if (originLoc == null) return null;
+        if (originLoc == null) return new List<RouteContext>();
 
         // 2. Geocode destination
         var destLoc = await GeocodeAsync(client, key, destinationAddress, cancellationToken);
-        if (destLoc == null) return null;
+        if (destLoc == null) return new List<RouteContext>();
 
         // 3. Direction
         var baseUrl = GetBaseUrl();
@@ -56,43 +56,55 @@ public class GoongMapsService : IGoongMapsService
         var url = $"{baseUrl}Direction?origin={Uri.EscapeDataString(originStr)}&destination={Uri.EscapeDataString(destStr)}&vehicle={vehicle}&api_key={key}";
 
         var response = await client.GetAsync(url, cancellationToken);
-        if (!response.IsSuccessStatusCode) return null;
+        if (!response.IsSuccessStatusCode) return new List<RouteContext>();
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         var root = doc.RootElement;
         var routes = root.GetProperty("routes");
-        if (routes.GetArrayLength() == 0) return null;
+        var routeCount = routes.GetArrayLength();
+        if (routeCount == 0) return new List<RouteContext>();
 
-        var route = routes[0];
-        var legs = route.GetProperty("legs");
-        if (legs.GetArrayLength() == 0) return null;
-
-        var leg = legs[0];
-        var distanceMeters = leg.GetProperty("distance").GetProperty("value").GetInt32();
-        var durationSeconds = leg.GetProperty("duration").GetProperty("value").GetInt32();
-        var durationMinutes = (int)Math.Ceiling(durationSeconds / 60.0);
-
-        LineString? routePath = null;
-        if (route.TryGetProperty("overview_polyline", out var polylineEl) &&
-            polylineEl.TryGetProperty("points", out var pointsEl))
-        {
-            var encoded = pointsEl.GetString();
-            if (!string.IsNullOrEmpty(encoded))
-                routePath = DecodePolylineToLineString(encoded);
-        }
+        var maxRoutes = _options.MaxRouteAlternatives <= 0 ? 1 : _options.MaxRouteAlternatives;
+        var take = Math.Min(routeCount, maxRoutes);
 
         var originPoint = new Point(originLoc.Value.lng, originLoc.Value.lat) { SRID = 4326 };
         var destPoint = new Point(destLoc.Value.lng, destLoc.Value.lat) { SRID = 4326 };
 
-        return new RouteContext
+        var result = new List<RouteContext>(take);
+
+        for (var i = 0; i < take; i++)
         {
-            RoutePath = routePath,
-            TotalDistanceMeters = distanceMeters,
-            EstimatedDurationMinutes = durationMinutes,
-            OriginLocation = originPoint,
-            DestinationLocation = destPoint
-        };
+            var route = routes[i];
+            var legs = route.GetProperty("legs");
+            if (legs.GetArrayLength() == 0)
+                continue;
+
+            var leg = legs[0];
+            var distanceMeters = leg.GetProperty("distance").GetProperty("value").GetInt32();
+            var durationSeconds = leg.GetProperty("duration").GetProperty("value").GetInt32();
+            var durationMinutes = (int)Math.Ceiling(durationSeconds / 60.0);
+
+            LineString? routePath = null;
+            if (route.TryGetProperty("overview_polyline", out var polylineEl) &&
+                polylineEl.TryGetProperty("points", out var pointsEl))
+            {
+                var encoded = pointsEl.GetString();
+                if (!string.IsNullOrEmpty(encoded))
+                    routePath = DecodePolylineToLineString(encoded);
+            }
+
+            result.Add(new RouteContext
+            {
+                RoutePath = routePath,
+                TotalDistanceMeters = distanceMeters,
+                EstimatedDurationMinutes = durationMinutes,
+                OriginLocation = originPoint,
+                DestinationLocation = destPoint
+            });
+        }
+
+        return result;
     }
 
     public async Task<Point?> GeocodeAddressToPointAsync(string address, CancellationToken cancellationToken = default)

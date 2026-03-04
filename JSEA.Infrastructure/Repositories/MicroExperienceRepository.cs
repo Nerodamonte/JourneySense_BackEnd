@@ -140,4 +140,27 @@ LIMIT @p1";
             EstimatedStopMinutes = r.EstimatedStopMinutes
         }).ToList();
     }
+
+    public async Task<int> CountAlongRouteAsync(NetTopologySuite.Geometries.LineString? routePath, int maxDetourDistanceMeters, CancellationToken cancellationToken = default)
+    {
+        if (routePath == null)
+            return 0;
+
+        // Đếm experiences active gần tuyến (không phụ thuộc journeys, không dùng mood/time/weather để tránh quá nặng).
+        var distance = maxDetourDistanceMeters > 0 ? maxDetourDistanceMeters : 2000;
+
+        // Sử dụng hàm ST_DWithin qua SQL thô để tránh phụ thuộc extension EFFunctions.
+        const string sql = @"
+SELECT COUNT(*)
+FROM experiences e
+WHERE e.location IS NOT NULL
+  AND e.status = 'active'
+  AND ST_DWithin(@p0::geography, e.location::geography, @p1)";
+
+        var count = await _context.Database
+            .SqlQueryRaw<int>(sql, routePath, distance)
+            .SingleAsync(cancellationToken);
+
+        return count;
+    }
 }

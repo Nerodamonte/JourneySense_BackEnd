@@ -14,4 +14,7 @@ public interface IMicroExperienceRepository
 
     /// <summary>Experiences gần tuyến (trong bán kính detour), lọc theo mood, weather, timeOfDay và status. Sắp xếp theo khoảng cách.</summary>
     Task<List<RouteMicroExperienceSuggestionResponse>> FindSuggestionsAlongRouteAsync(Guid journeyId, int limit, string? weatherStr, string? timeOfDayStr, CancellationToken cancellationToken = default);
+
+    /// <summary>Đếm số experiences active gần một tuyến bất kỳ (theo routePath, maxDetourDistanceMeters, vehicleType...). Không dùng journeys.</summary>
+    Task<int> CountAlongRouteAsync(NetTopologySuite.Geometries.LineString? routePath, int maxDetourDistanceMeters, CancellationToken cancellationToken = default);
 }

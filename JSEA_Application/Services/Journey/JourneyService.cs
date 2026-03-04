@@ -12,17 +12,20 @@ public class JourneyService : IJourneyService
     private readonly IGoongMapsService _goongMapsService;
     private readonly IMicroExperienceRepository _microExperienceRepository;
     private readonly IWeatherService _weatherService;
+    private readonly IFactorRepository _factorRepository;
 
     public JourneyService(
         IJourneyRepository journeyRepository,
         IGoongMapsService goongMapsService,
         IMicroExperienceRepository microExperienceRepository,
-        IWeatherService weatherService)
+        IWeatherService weatherService,
+        IFactorRepository factorRepository)
     {
         _journeyRepository = journeyRepository;
         _goongMapsService = goongMapsService;
         _microExperienceRepository = microExperienceRepository;
         _weatherService = weatherService;
+        _factorRepository = factorRepository;
     }
 
     public async Task<JourneySetupResponse?> ValidateAndCreateJourneyAsync(JourneySetupRequest request, Guid? travelerId, CancellationToken cancellationToken = default)
@@ -30,7 +33,7 @@ public class JourneyService : IJourneyService
         if (!travelerId.HasValue)
             return null;
 
-        var routeContext = await _goongMapsService.AnalyzeRouteContextAsync(
+        var routes = await _goongMapsService.AnalyzeRouteContextAsync(
             request.OriginAddress,
             request.DestinationAddress,
             request.VehicleType,
@@ -38,23 +41,45 @@ public class JourneyService : IJourneyService
             request.MaxDetourDistanceMeters,
             cancellationToken);
 
-        if (routeContext == null)
+        if (routes == null || routes.Count == 0)
             return null;
+
+        // Tính số lượng experiences phù hợp dọc theo từng tuyến (dựa trên filter cứng + status).
+        foreach (var route in routes)
+        {
+            route.ExperienceCount = await _microExperienceRepository.CountAlongRouteAsync(
+                route.RoutePath,
+                request.MaxDetourDistanceMeters,
+                cancellationToken);
+        }
+
+        var primaryRoute = routes[0];
+
+        Guid? currentMoodFactorId = null;
+        if (request.CurrentMood.HasValue)
+        {
+            var moodName = request.CurrentMood.Value.ToString();
+            var factor = await _factorRepository.GetMoodFactorByNameAsync(moodName, cancellationToken);
+            if (factor != null)
+            {
+                currentMoodFactorId = factor.Id;
+            }
+        }
 
         var journey = new Models.Journey
         {
             TravelerId = travelerId.Value,
             OriginAddress = request.OriginAddress,
             DestinationAddress = request.DestinationAddress,
-            OriginLocation = routeContext.OriginLocation,
-            DestinationLocation = routeContext.DestinationLocation,
-            RoutePath = routeContext.RoutePath,
-            TotalDistanceMeters = routeContext.TotalDistanceMeters,
-            EstimatedDurationMinutes = routeContext.EstimatedDurationMinutes,
+            OriginLocation = primaryRoute.OriginLocation,
+            DestinationLocation = primaryRoute.DestinationLocation,
+            RoutePath = primaryRoute.RoutePath,
+            TotalDistanceMeters = primaryRoute.TotalDistanceMeters,
+            EstimatedDurationMinutes = primaryRoute.EstimatedDurationMinutes,
             VehicleType = request.VehicleType.ToString().ToLowerInvariant(),
             TimeBudgetMinutes = request.TimeBudgetMinutes,
             MaxDetourDistanceMeters = request.MaxDetourDistanceMeters,
-            CurrentMoodFactorId = null,
+            CurrentMoodFactorId = currentMoodFactorId,
             PreferredStopDurationMinutes = request.PreferredStopDurationMinutes,
             MaxStops = request.MaxStopCount > 0 ? request.MaxStopCount : null,
             Status = "planning"
@@ -64,7 +89,7 @@ public class JourneyService : IJourneyService
 
         var saved = await _journeyRepository.SaveAsync(journey, waypoints, cancellationToken);
 
-        var summary = $"Tuyến ~{routeContext.TotalDistanceMeters / 1000.0:F1} km, ước tính ~{routeContext.EstimatedDurationMinutes} phút.";
+        var summary = $"Tuyến ~{primaryRoute.TotalDistanceMeters / 1000.0:F1} km, ước tính ~{primaryRoute.EstimatedDurationMinutes} phút.";
 
         return new JourneySetupResponse
         {
@@ -78,7 +103,8 @@ public class JourneyService : IJourneyService
             MaxDetourDistanceMeters = saved.MaxDetourDistanceMeters,
             CurrentMood = request.CurrentMood,
             PreferredStopDurationMinutes = saved.PreferredStopDurationMinutes,
-            MaxStopCount = request.MaxStopCount
+            MaxStopCount = request.MaxStopCount,
+            Routes = routes
         };
     }
 
