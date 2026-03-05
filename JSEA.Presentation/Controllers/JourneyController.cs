@@ -19,7 +19,7 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
-    /// Lấy danh sách hành trình của user đăng nhập (lịch sử micro-journey). Yêu cầu đăng nhập.
+    /// Lấy danh sách hành trình của user đăng nhập (lịch sử micro-journey). (Authorized)
     /// </summary>
     [HttpGet]
     [Authorize]
@@ -35,9 +35,7 @@ public class JourneyController : ControllerBase
         return Ok(list);
     }
 
-    /// <summary>
-    /// Lấy chi tiết một hành trình theo id.
-    /// </summary>
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(JourneyDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -50,7 +48,7 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
-    /// Gợi ý micro-experiences dọc/gần tuyến: lọc theo vibe (current_mood) của journey, weather, timeOfDay, trong bán kính detour. Query: limit (1–50), weather (Sunny/Cloudy/Rainy), timeOfDay (Morning/Afternoon/Evening/Night).
+    /// Lấy các gợi ý micro-experiences dọc/gần tuyến theo journey.
     /// </summary>
     [HttpGet("{id:guid}/suggestions")]
     [ProducesResponseType(typeof(List<RouteMicroExperienceSuggestionResponse>), StatusCodes.Status200OK)]
@@ -66,7 +64,7 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
-    /// Thiết lập hành trình: điểm đi, điểm đến, loại xe, thời gian, độ lệch, travel vibe, thời gian dừng ưu tiên. Gọi Goong Maps phân tích tuyến và lưu journey + waypoints.
+    /// Thiết lập hành trình: điểm đi, điểm đến, loại xe, thời gian, độ lệch, travel vibe, thời gian dừng ưu tiên. (Authorized)
     /// </summary>
     [HttpPost("setup")]
     [ProducesResponseType(typeof(JourneySetupResponse), StatusCodes.Status201Created)]

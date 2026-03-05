@@ -121,7 +121,10 @@ public class JourneyService : IJourneyService
             DestinationAddress = j.DestinationAddress,
             VehicleType = Enum.TryParse<VehicleType>(j.VehicleType, true, out var vt) ? vt : null,
             TimeBudgetMinutes = j.TimeBudgetMinutes,
-            CurrentMood = null,
+            CurrentMood = j.CurrentMoodFactor != null &&
+                          Enum.TryParse<MoodType>(j.CurrentMoodFactor.Name, true, out var mood)
+                ? mood
+                : null,
             Status = Enum.TryParse<JourneyStatus>(j.Status, true, out var js) ? js : null,
             CreatedAt = j.CreatedAt
         }).ToList();
@@ -144,7 +147,10 @@ public class JourneyService : IJourneyService
             EstimatedDurationMinutes = j.EstimatedDurationMinutes,
             TimeBudgetMinutes = j.TimeBudgetMinutes,
             MaxDetourDistanceMeters = j.MaxDetourDistanceMeters,
-            CurrentMood = null,
+            CurrentMood = j.CurrentMoodFactor != null &&
+                          Enum.TryParse<MoodType>(j.CurrentMoodFactor.Name, true, out var mood)
+                ? mood
+                : null,
             PreferredStopDurationMinutes = j.PreferredStopDurationMinutes,
             Status = Enum.TryParse<JourneyStatus>(j.Status, true, out var js) ? js : null,
             StartedAt = j.StartedAt,

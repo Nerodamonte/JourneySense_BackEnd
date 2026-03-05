@@ -15,9 +15,7 @@ public class PaymentController : ControllerBase
         _paymentService = paymentService;
     }
 
-    /// <summary>
-    /// Tạo link thanh toán PayOS. Trả về CheckoutUrl để chuyển hướng người dùng thanh toán.
-    /// </summary>
+  
     [HttpPost("create")]
     [ProducesResponseType(typeof(JSEA_Application.DTOs.Respone.Payment.CreatePaymentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -41,9 +39,6 @@ public class PaymentController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Lấy thông tin/trạng thái link thanh toán theo PaymentLinkId (trả về từ API create).
-    /// </summary>
     [HttpGet("link/{paymentLinkId}")]
     [ProducesResponseType(typeof(JSEA_Application.DTOs.Respone.Payment.PaymentLinkInfoResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -59,9 +54,7 @@ public class PaymentController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Hủy link thanh toán (chỉ khi chưa thanh toán).
-    /// </summary>
+
     [HttpPost("link/{paymentLinkId}/cancel")]
     [ProducesResponseType(typeof(JSEA_Application.DTOs.Respone.Payment.PaymentLinkInfoResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -98,46 +98,65 @@ public class MicroExperienceRepository : IMicroExperienceRepository
 
     public async Task<List<RouteMicroExperienceSuggestionResponse>> FindSuggestionsAlongRouteAsync(Guid journeyId, int limit, string? weatherStr, string? timeOfDayStr, CancellationToken cancellationToken = default)
     {
-        const string sql = @"
-SELECT e.id AS ""Id"", e.name AS ""Name"", c.name AS ""CategoryName"", e.address AS ""Address"", e.city AS ""City"", e.country AS ""Country"",
-  e.preferred_times AS ""PreferredTimes"", e.status AS ""Status"",
-  ST_Y(e.location::geometry) AS ""Latitude"", ST_X(e.location::geometry) AS ""Longitude"",
-  ROUND(ST_Distance(j.route_path::geography, e.location::geography))::int AS ""DetourDistanceMeters"",
-  COALESCE(ed.estimated_duration_minutes, COALESCE(j.preferred_stop_duration_minutes, 15))::int AS ""EstimatedStopMinutes""
-FROM experiences e
-LEFT JOIN categories c ON c.id = e.category_id
-LEFT JOIN experience_details ed ON ed.experience_id = e.id
-CROSS JOIN journeys j
-WHERE j.id = @p0
-  AND e.location IS NOT NULL
-  AND j.route_path IS NOT NULL
-  AND ST_DWithin(j.route_path::geography, e.location::geography, COALESCE(j.max_detour_distance_meters, 2000))
-  AND e.status = 'active'
-  AND (j.current_mood_factor_id IS NULL OR EXISTS (SELECT 1 FROM experience_tags et WHERE et.experience_id = e.id AND et.factor_id = j.current_mood_factor_id))
-  AND (@p2 IS NULL OR (e.weather_suitability IS NOT NULL AND e.weather_suitability @> ARRAY[@p2]::varchar[]))
-  AND (@p3 IS NULL OR (e.preferred_times IS NOT NULL AND e.preferred_times @> ARRAY[@p3]::varchar[]))
-ORDER BY ST_Distance(j.route_path::geography, e.location::geography)
-LIMIT @p1";
-
-        var rows = await _context.Set<RouteSuggestionSqlRow>()
-            .FromSqlRaw(sql, journeyId, limit, weatherStr ?? (object)DBNull.Value, timeOfDayStr ?? (object)DBNull.Value)
+        var journey = await _context.Journeys
             .AsNoTracking()
+            .FirstOrDefaultAsync(j => j.Id == journeyId, cancellationToken);
+
+        if (journey == null || journey.RoutePath == null)
+            return new List<RouteMicroExperienceSuggestionResponse>();
+
+        var maxDetour = journey.MaxDetourDistanceMeters > 0 ? journey.MaxDetourDistanceMeters : 2000;
+        var maxCount = limit is > 0 and <= 100 ? limit : 20;
+
+        var query = _context.Experiences
+            .AsNoTracking()
+            .Include(e => e.Category)
+            .Include(e => e.ExperienceDetail)
+            .Include(e => e.ExperienceTags)
+            .Where(e => e.Location != null && e.Status == "active")
+            .Where(e => e.Location!.Distance(journey.RoutePath) <= maxDetour);
+
+        if (journey.CurrentMoodFactorId.HasValue)
+        {
+            var moodId = journey.CurrentMoodFactorId.Value;
+            query = query.Where(e => e.ExperienceTags.Any(et => et.FactorId == moodId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(weatherStr))
+        {
+            query = query.Where(e =>
+                e.WeatherSuitability != null &&
+                e.WeatherSuitability.Contains(weatherStr));
+        }
+
+        if (!string.IsNullOrWhiteSpace(timeOfDayStr))
+        {
+            query = query.Where(e =>
+                e.PreferredTimes != null &&
+                e.PreferredTimes.Contains(timeOfDayStr));
+        }
+
+        var experiences = await query
+            .OrderBy(e => e.Location!.Distance(journey.RoutePath))
+            .Take(maxCount)
             .ToListAsync(cancellationToken);
 
-        return rows.Select(r => new RouteMicroExperienceSuggestionResponse
+        return experiences.Select(e => new RouteMicroExperienceSuggestionResponse
         {
-            Id = r.Id,
-            Name = r.Name,
-            CategoryName = r.CategoryName,
-            Address = r.Address,
-            City = r.City,
-            Country = r.Country,
-            PreferredTimes = r.PreferredTimes,
-            Status = r.Status,
-            Latitude = r.Latitude,
-            Longitude = r.Longitude,
-            DetourDistanceMeters = r.DetourDistanceMeters,
-            EstimatedStopMinutes = r.EstimatedStopMinutes
+            Id = e.Id,
+            Name = e.Name,
+            CategoryName = e.Category?.Name,
+            Address = e.Address,
+            City = e.City,
+            Country = e.Country,
+            PreferredTimes = e.PreferredTimes,
+            Status = e.Status,
+            Latitude = e.Location.Y,
+            Longitude = e.Location.X,
+            DetourDistanceMeters = (int)Math.Round(e.Location.Distance(journey.RoutePath)),
+            EstimatedStopMinutes = e.ExperienceDetail?.EstimatedDurationMinutes
+                ?? journey.PreferredStopDurationMinutes
+                ?? 15
         }).ToList();
     }
 
@@ -149,18 +168,13 @@ LIMIT @p1";
         // Đếm experiences active gần tuyến (không phụ thuộc journeys, không dùng mood/time/weather để tránh quá nặng).
         var distance = maxDetourDistanceMeters > 0 ? maxDetourDistanceMeters : 2000;
 
-        // Sử dụng hàm ST_DWithin qua SQL thô để tránh phụ thuộc extension EFFunctions.
-        const string sql = @"
-SELECT COUNT(*)
-FROM experiences e
-WHERE e.location IS NOT NULL
-  AND e.status = 'active'
-  AND ST_DWithin(@p0::geography, e.location::geography, @p1)";
-
-        var count = await _context.Database
-            .SqlQueryRaw<int>(sql, routePath, distance)
-            .SingleAsync(cancellationToken);
-
-        return count;
+        // Sử dụng LINQ + NetTopologySuite để EF/Npgsql tự dịch sang ST_Distance/ST_DWithin.
+        // e.Location: geography(Point,4326)
+        // routePath : geometry(LineString,4326) được truyền vào như tham số.
+        return await _context.Experiences
+            .AsNoTracking()
+            .Where(e => e.Location != null && e.Status == "active")
+            .Where(e => e.Location!.Distance(routePath) <= distance)
+            .CountAsync(cancellationToken);
     }
 }

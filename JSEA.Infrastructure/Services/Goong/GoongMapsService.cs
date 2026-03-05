@@ -23,7 +23,6 @@ public class GoongMapsService : IGoongMapsService
     {
         if (!string.IsNullOrWhiteSpace(_options.BaseUrl))
             return _options.BaseUrl.TrimEnd('/') + "/";
-        // Goong REST API hiện chỉ có base https://rsapi.goong.io/ (không có path /v2/)
         return $"{DefaultHost}/";
     }
 
@@ -53,7 +52,9 @@ public class GoongMapsService : IGoongMapsService
         var vehicle = MapVehicle(vehicleType);
         var originStr = $"{originLoc.Value.lat},{originLoc.Value.lng}";
         var destStr = $"{destLoc.Value.lat},{destLoc.Value.lng}";
-        var url = $"{baseUrl}Direction?origin={Uri.EscapeDataString(originStr)}&destination={Uri.EscapeDataString(destStr)}&vehicle={vehicle}&api_key={key}";
+        // Nếu cấu hình cho phép nhiều route, bật alternatives=true để Goong trả về nhiều tuyến (nếu có).
+        var alternatives = _options.MaxRouteAlternatives > 1 ? "true" : "false";
+        var url = $"{baseUrl}Direction?origin={Uri.EscapeDataString(originStr)}&destination={Uri.EscapeDataString(destStr)}&vehicle={vehicle}&alternatives={alternatives}&api_key={key}";
 
         var response = await client.GetAsync(url, cancellationToken);
         if (!response.IsSuccessStatusCode) return new List<RouteContext>();
@@ -86,10 +87,11 @@ public class GoongMapsService : IGoongMapsService
             var durationMinutes = (int)Math.Ceiling(durationSeconds / 60.0);
 
             LineString? routePath = null;
+            string? encoded = null;
             if (route.TryGetProperty("overview_polyline", out var polylineEl) &&
                 polylineEl.TryGetProperty("points", out var pointsEl))
             {
-                var encoded = pointsEl.GetString();
+                encoded = pointsEl.GetString();
                 if (!string.IsNullOrEmpty(encoded))
                     routePath = DecodePolylineToLineString(encoded);
             }
@@ -100,7 +102,12 @@ public class GoongMapsService : IGoongMapsService
                 TotalDistanceMeters = distanceMeters,
                 EstimatedDurationMinutes = durationMinutes,
                 OriginLocation = originPoint,
-                DestinationLocation = destPoint
+                DestinationLocation = destPoint,
+                OriginLatitude = originPoint.Y,
+                OriginLongitude = originPoint.X,
+                DestinationLatitude = destPoint.Y,
+                DestinationLongitude = destPoint.X,
+                Polyline = encoded
             });
         }
 

@@ -40,6 +40,7 @@ public class JourneyRepository : IJourneyRepository
     public async Task<Journey?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
     {
         return await _context.Journeys
+            .Include(j => j.CurrentMoodFactor)
             .Include(j => j.JourneyWaypoints.OrderBy(w => w.StopOrder))
             .FirstOrDefaultAsync(j => j.Id == id, cancellationToken);
     }
@@ -47,6 +48,7 @@ public class JourneyRepository : IJourneyRepository
     public async Task<List<Journey>> GetByTravelerIdAsync(Guid travelerId, CancellationToken cancellationToken = default)
     {
         return await _context.Journeys
+            .Include(j => j.CurrentMoodFactor)
             .AsNoTracking()
             .Where(j => j.TravelerId == travelerId)
             .OrderByDescending(j => j.CreatedAt)

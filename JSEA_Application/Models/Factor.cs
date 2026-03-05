@@ -41,7 +41,7 @@ public partial class Factor
     [InverseProperty("Factor")]
     public virtual ICollection<JourneyMoodLog> JourneyMoodLogs { get; set; } = new List<JourneyMoodLog>();
 
-    [InverseProperty("Factor")]
+    [InverseProperty("CurrentMoodFactor")]
     public virtual ICollection<Journey> Journeys { get; set; } = new List<Journey>();
 
     [InverseProperty("Factor")]

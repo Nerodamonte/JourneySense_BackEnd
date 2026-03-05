@@ -16,9 +16,7 @@ public class MicroExperienceController : ControllerBase
         _microExperienceService = microExperienceService;
     }
 
-    /// <summary>
-    /// Lấy danh sách micro-experience với bộ lọc (keyword, categoryId, status).
-    /// </summary>
+
     [HttpGet]
     [ProducesResponseType(typeof(List<MicroExperienceListItemResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetList(
@@ -41,9 +39,7 @@ public class MicroExperienceController : ControllerBase
         return Ok(list);
     }
 
-    /// <summary>
-    /// Lấy chi tiết một micro-experience theo id.
-    /// </summary>
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(MicroExperienceDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -55,9 +51,7 @@ public class MicroExperienceController : ControllerBase
         return Ok(detail);
     }
 
-    /// <summary>
-    /// Tạo micro-experience mới. Slug sinh từ tên; trùng slug sẽ trả 400.
-    /// </summary>
+   
     [HttpPost]
     [ProducesResponseType(typeof(MicroExperienceDetailResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -75,9 +69,7 @@ public class MicroExperienceController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
     }
 
-    /// <summary>
-    /// Cập nhật micro-experience. Không tìm thấy trả 404; slug trùng (khi đổi tên) trả 400.
-    /// </summary>
+   
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(MicroExperienceDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -97,9 +89,7 @@ public class MicroExperienceController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>
-    /// Xóa micro-experience. Không tìm thấy trả 404.
-    /// </summary>
+
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -19,7 +19,7 @@ public class ExperienceController : ControllerBase
     }
 
     /// <summary>
-    /// Đánh dấu đã ghé thăm + gửi đánh giá (1-5) và/hoặc feedback, ảnh. Cộng điểm thưởng. Yêu cầu đăng nhập. Mỗi (traveler, experience, journey) chỉ được gửi một lần.
+    /// OnDev
     /// </summary>
     [HttpPost("visit")]
     [Authorize]
