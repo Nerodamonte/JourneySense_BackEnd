@@ -1,5 +1,6 @@
 using System.Text.Json;
 using JSEA_Application.DTOs.Respone.Journey;
+using JSEA_Application.DTOs.Respone.Place;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using Microsoft.Extensions.Options;
@@ -129,6 +130,72 @@ public class GoongMapsService : IGoongMapsService
             return null;
 
         return new Point(coord.Value.lng, coord.Value.lat) { SRID = 4326 };
+    }
+
+    public async Task<List<PlaceSuggestionResponse>> SearchPlaceSuggestionsAsync(
+        string input,
+        double? latitude,
+        double? longitude,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return new List<PlaceSuggestionResponse>();
+
+        var client = _httpClientFactory.CreateClient();
+        var key = _options.ApiKey;
+        if (string.IsNullOrWhiteSpace(key))
+            return new List<PlaceSuggestionResponse>();
+
+        var baseUrl = GetBaseUrl();
+        var url = $"{baseUrl}Place/AutoComplete?api_key={Uri.EscapeDataString(key)}&input={Uri.EscapeDataString(input.Trim())}";
+        if (latitude.HasValue && longitude.HasValue)
+            url += $"&location={latitude.Value:G},{longitude.Value:G}";
+        if (limit > 0 && limit <= 20)
+            url += $"&limit={limit}";
+        else
+            url += "&limit=10";
+
+        var response = await client.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            return new List<PlaceSuggestionResponse>();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("predictions", out var predictions) || predictions.GetArrayLength() == 0)
+            return new List<PlaceSuggestionResponse>();
+
+        var list = new List<PlaceSuggestionResponse>();
+        foreach (var p in predictions.EnumerateArray())
+        {
+            var description = p.TryGetProperty("description", out var desc) ? desc.GetString() : null;
+            var placeId = p.TryGetProperty("place_id", out var pid) ? pid.GetString() : null;
+            if (string.IsNullOrEmpty(description) || string.IsNullOrEmpty(placeId))
+                continue;
+
+            string? mainText = null, secondaryText = null;
+            if (p.TryGetProperty("structured_formatting", out var sf))
+            {
+                if (sf.TryGetProperty("main_text", out var mt)) mainText = mt.GetString();
+                if (sf.TryGetProperty("secondary_text", out var st)) secondaryText = st.GetString();
+            }
+
+            string? plusCode = null;
+            if (p.TryGetProperty("plus_code", out var pc) && pc.TryGetProperty("compound_code", out var cc))
+                plusCode = cc.GetString();
+
+            list.Add(new PlaceSuggestionResponse
+            {
+                Description = description,
+                PlaceId = placeId,
+                MainText = mainText,
+                SecondaryText = secondaryText,
+                PlusCode = plusCode
+            });
+        }
+
+        return list;
     }
 
     private async Task<(double lat, double lng)?> GeocodeAsync(

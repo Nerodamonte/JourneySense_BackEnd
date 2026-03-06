@@ -1,4 +1,5 @@
 using JSEA_Application.DTOs.Respone.Journey;
+using JSEA_Application.DTOs.Respone.Place;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,28 @@ public class GoongController : ControllerBase
     public GoongController(IGoongMapsService goongMapsService)
     {
         _goongMapsService = goongMapsService;
+    }
+
+    /// <summary>
+    /// Gợi ý địa điểm theo từ khóa (Goong Place AutoComplete). Dùng cho ô tìm kiếm địa chỉ khi chọn điểm đi/điểm đến.
+    /// </summary>
+    [HttpGet("place-suggestions")]
+    [ProducesResponseType(typeof(List<PlaceSuggestionResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetPlaceSuggestions(
+        [FromQuery] string input,
+        [FromQuery] double? latitude,
+        [FromQuery] double? longitude,
+        [FromQuery] int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return BadRequest(new { message = "input không được để trống." });
+        if (limit is < 1 or > 20)
+            limit = 10;
+
+        var list = await _goongMapsService.SearchPlaceSuggestionsAsync(input, latitude, longitude, limit, cancellationToken);
+        return Ok(list);
     }
 
     /// <summary>
