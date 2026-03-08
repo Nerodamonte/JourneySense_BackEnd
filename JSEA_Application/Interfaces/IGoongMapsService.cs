@@ -31,4 +31,9 @@ public interface IGoongMapsService
     /// Geocode địa chỉ qua Goong Maps, trả về tọa độ (Point SRID 4326). Null nếu không tìm thấy.
     /// </summary>
     Task<Point?> GeocodeAddressToPointAsync(string address, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lấy chi tiết địa điểm theo place_id (từ Place AutoComplete). Trả về null nếu không tìm thấy.
+    /// </summary>
+    Task<PlaceDetailResponse?> GetPlaceDetailAsync(string placeId, CancellationToken cancellationToken = default);
 }

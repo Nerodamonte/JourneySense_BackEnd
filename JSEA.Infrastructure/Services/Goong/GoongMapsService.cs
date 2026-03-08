@@ -198,6 +198,48 @@ public class GoongMapsService : IGoongMapsService
         return list;
     }
 
+    public async Task<PlaceDetailResponse?> GetPlaceDetailAsync(string placeId, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(placeId))
+            return null;
+
+        var client = _httpClientFactory.CreateClient();
+        var key = _options.ApiKey;
+        if (string.IsNullOrWhiteSpace(key))
+            return null;
+
+        var baseUrl = GetBaseUrl();
+        var url = $"{baseUrl}Place/Detail?api_key={Uri.EscapeDataString(key)}&place_id={Uri.EscapeDataString(placeId.Trim())}";
+        var response = await client.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        var root = doc.RootElement;
+        if (!root.TryGetProperty("result", out var result))
+            return null;
+
+        var placeIdOut = result.TryGetProperty("place_id", out var pid) ? pid.GetString() : placeId.Trim();
+        var name = result.TryGetProperty("name", out var n) ? n.GetString() : null;
+        var formattedAddress = result.TryGetProperty("formatted_address", out var fa) ? fa.GetString() : null;
+        double? lat = null, lng = null;
+        if (result.TryGetProperty("geometry", out var geom) && geom.TryGetProperty("location", out var loc))
+        {
+            if (loc.TryGetProperty("lat", out var latEl)) lat = latEl.GetDouble();
+            if (loc.TryGetProperty("lng", out var lngEl)) lng = lngEl.GetDouble();
+        }
+
+        return new PlaceDetailResponse
+        {
+            PlaceId = placeIdOut ?? placeId.Trim(),
+            Name = name,
+            FormattedAddress = formattedAddress,
+            Latitude = lat,
+            Longitude = lng
+        };
+    }
+
     private async Task<(double lat, double lng)?> GeocodeAsync(
         HttpClient client,
         string apiKey,

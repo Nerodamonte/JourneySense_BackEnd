@@ -40,6 +40,27 @@ public class GoongController : ControllerBase
     }
 
     /// <summary>
+    /// Lấy chi tiết địa điểm theo place_id (từ Place AutoComplete). Trả về tên, địa chỉ đầy đủ, tọa độ.
+    /// </summary>
+    [HttpGet("place-detail")]
+    [ProducesResponseType(typeof(PlaceDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPlaceDetail(
+        [FromQuery] string placeId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(placeId))
+            return BadRequest(new { message = "placeId không được để trống." });
+
+        var detail = await _goongMapsService.GetPlaceDetailAsync(placeId, cancellationToken);
+        if (detail == null)
+            return NotFound(new { message = "Không tìm thấy chi tiết địa điểm cho place_id này." });
+
+        return Ok(detail);
+    }
+
+    /// <summary>
     /// Test Goong Geocode: trả về toạ độ (lat,lng) cho một địa chỉ text.
     /// Dùng để kiểm tra API key và geocode.
     /// </summary>
