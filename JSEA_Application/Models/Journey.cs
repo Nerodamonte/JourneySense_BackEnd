@@ -47,8 +47,9 @@ public partial class Journey
     [Column("estimated_duration_minutes")]
     public int? EstimatedDurationMinutes { get; set; }
 
-    [Column("current_mood_factor_id")]
-    public Guid? CurrentMoodFactorId { get; set; }
+    [Column("current_mood")]
+    [StringLength(20)]
+    public string? CurrentMood { get; set; }
 
     [Column("preferred_crowd_level")]
     [StringLength(20)]
@@ -60,9 +61,6 @@ public partial class Journey
 
     [Column("max_detour_distance_meters")]
     public int MaxDetourDistanceMeters { get; set; }
-
-    [Column("preferred_stop_duration_minutes")]
-    public int? PreferredStopDurationMinutes { get; set; }
 
     [Column("time_budget_minutes")]
     public int? TimeBudgetMinutes { get; set; }
@@ -88,10 +86,6 @@ public partial class Journey
 
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
-
-    [ForeignKey("CurrentMoodFactorId")]
-    [InverseProperty("Journeys")]
-    public virtual Factor? CurrentMoodFactor { get; set; }
 
     [InverseProperty("Journey")]
     public virtual ICollection<JourneyCrowdLog> JourneyCrowdLogs { get; set; } = new List<JourneyCrowdLog>();

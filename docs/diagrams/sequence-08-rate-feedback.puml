@@ -5,17 +5,17 @@ skinparam responseMessageBelowArrow true
 skinparam linetype ortho
 
 actor Traveler
-participant "ExperienceDetailPage\n<<UI>>" as ExpUI
-participant "ExperienceController\n<<controller>>" as ExpController
-participant "RateFeedbackService\n<<service>>" as ExpService
-participant "VisitRepository\n<<repository>>" as VisitRepo
-participant "RatingRepository\n<<repository>>" as RatingRepo
-participant "FeedbackRepository\n<<repository>>" as FeedbackRepo
-participant "RewardService\n<<service>>" as RewardService
+participant "<<UI>>\n:ExperienceDetailPage" as ExpUI
+participant "<controller>>\n:ExperienceController" as ExpController
+participant "<<service>>\n:RateFeedbackService" as ExpService
+participant "<<repository>>\n:VisitRepository" as VisitRepo
+participant "<<repository>>\n:RatingRepository" as RatingRepo
+participant "<<repository>>\n:FeedbackRepository" as FeedbackRepo
+participant "<<service>>\n:RewardService" as RewardService
 database "JSEADatabase" as DB
 
 == Mark as visited & rate, feedback ==
-Traveler -> ExpUI : 1. submitVisitWithFeedback(experienceId, journeyId, rating, feedbackText, photoUrls)
+Traveler -> ExpUI : 1. userSubmitVisitWithFeedback(experienceId, journeyId, rating, feedbackText, photoUrls)
 activate ExpUI
 activate Traveler
 ExpUI -> ExpController : 2. POST /experiences/visit(visitRequest)

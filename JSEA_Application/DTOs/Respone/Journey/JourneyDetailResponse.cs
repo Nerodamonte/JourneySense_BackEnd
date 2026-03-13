@@ -37,9 +37,6 @@ public class JourneyDetailResponse
     /// <summary>Mood/vibe hiện tại của journey (nếu có).</summary>
     public MoodType? CurrentMood { get; set; }
 
-    /// <summary>Thời gian dừng ưu tiên tại mỗi Experience (phút).</summary>
-    public int? PreferredStopDurationMinutes { get; set; }
-
     /// <summary>Trạng thái hành trình.</summary>
     public JourneyStatus? Status { get; set; }
 

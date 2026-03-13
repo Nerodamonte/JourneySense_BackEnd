@@ -13,6 +13,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 using Npgsql;
+using Pgvector;
 using System.Text;
 using System.Text.Json.Serialization;
 
@@ -26,6 +27,9 @@ var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
 
 // Geography/Geometry (Point, etc.) cho MicroExperience.Location, Journey, ...
 dataSourceBuilder.UseNetTopologySuite();
+
+// pgvector extension cho kiểu vector(768)
+dataSourceBuilder.UseVector();
 
 // PostgreSQL enum ↔ C# enum
 dataSourceBuilder.MapEnum<UserRole>("user_role");
@@ -73,7 +77,6 @@ builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
 builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
 builder.Services.AddScoped<IRewardService, JSEA_Application.Services.Experience.RewardService>();
 builder.Services.AddScoped<IRateFeedbackService, JSEA_Application.Services.Experience.RateFeedbackService>();
-builder.Services.AddScoped<IFactorRepository, FactorRepository>();
 
 // PayOS
 builder.Services.Configure<PayOSOptions>(builder.Configuration.GetSection("PayOS"));

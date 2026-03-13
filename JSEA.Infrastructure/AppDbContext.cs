@@ -25,9 +25,8 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<Experience> Experiences { get; set; }
     public virtual DbSet<ExperienceDetail> ExperienceDetails { get; set; }
     public virtual DbSet<ExperienceMetric> ExperienceMetrics { get; set; }
+    public virtual DbSet<ExperienceEmbedding> ExperienceEmbeddings { get; set; }
     public virtual DbSet<ExperiencePhoto> ExperiencePhotos { get; set; }
-    public virtual DbSet<ExperienceTag> ExperienceTags { get; set; }
-    public virtual DbSet<Factor> Factors { get; set; }
     public virtual DbSet<Feedback> Feedbacks { get; set; }
     public virtual DbSet<Journey> Journeys { get; set; }
     public virtual DbSet<JourneyCrowdLog> JourneyCrowdLogs { get; set; }
@@ -46,7 +45,6 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<UserFavorite> UserFavorites { get; set; }
     public virtual DbSet<UserPackage> UserPackages { get; set; }
     public virtual DbSet<UserProfile> UserProfiles { get; set; }
-    public virtual DbSet<UserVibe> UserVibes { get; set; }
     public virtual DbSet<Visit> Visits { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -55,7 +53,8 @@ public partial class AppDbContext : DbContext
             .HasPostgresExtension("fuzzystrmatch")
             .HasPostgresExtension("pg_trgm")
             .HasPostgresExtension("postgis")
-            .HasPostgresExtension("uuid-ossp");
+            .HasPostgresExtension("uuid-ossp")
+            .HasPostgresExtension("vector");
 
         modelBuilder.Entity<AuditLog>(entity =>
         {
@@ -136,6 +135,7 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.ExperienceId).HasName("experience_metrics_pkey");
             entity.Property(e => e.ExperienceId).ValueGeneratedNever();
+            entity.Property(e => e.QualityScore).HasDefaultValue(0m);
             entity.Property(e => e.AvgRating).HasDefaultValue(0m);
             entity.Property(e => e.TotalRatings).HasDefaultValue(0);
             entity.Property(e => e.TotalVisits).HasDefaultValue(0);
@@ -160,23 +160,19 @@ public partial class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_photo_user");
         });
+        modelBuilder.HasPostgresExtension("vector");
 
-        modelBuilder.Entity<ExperienceTag>(entity =>
+        modelBuilder.Entity<ExperienceEmbedding>(entity =>
         {
-            entity.HasKey(e => new { e.ExperienceId, e.FactorId }).HasName("experience_tags_pkey");
-            entity.HasOne(d => d.Experience).WithMany(p => p.ExperienceTags)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("fk_exp_tags_exp");
-            entity.HasOne(d => d.Factor).WithMany(p => p.ExperienceTags)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("fk_exp_tags_factor");
-        });
-
-        modelBuilder.Entity<Factor>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("factors_pkey");
+            entity.HasKey(e => e.Id).HasName("experience_embeddings_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.EmbeddedAt).HasDefaultValueSql("now()");
+            entity.HasIndex(e => e.ExperienceId).IsUnique().HasDatabaseName("experience_embeddings_exp_unique");
+            entity.HasOne(d => d.Experience)
+                .WithOne(p => p.ExperienceEmbedding)
+                .HasForeignKey<ExperienceEmbedding>(d => d.ExperienceId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_embedding_exp");
         });
 
         modelBuilder.Entity<Feedback>(entity =>
@@ -200,9 +196,6 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Traveler).WithMany(p => p.Journeys)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_journey_user");
-            entity.HasOne(d => d.CurrentMoodFactor).WithMany(p => p.Journeys)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("fk_journey_mood");
         });
 
         modelBuilder.Entity<JourneyCrowdLog>(entity =>
@@ -223,8 +216,6 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Journey).WithMany(p => p.JourneyMoodLogs)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_mood_log_journey");
-            entity.HasOne(d => d.Factor).WithMany(p => p.JourneyMoodLogs)
-                .HasConstraintName("fk_mood_log_factor");
         });
 
         modelBuilder.Entity<JourneySuggestion>(entity =>
@@ -377,21 +368,6 @@ public partial class AppDbContext : DbContext
                 .HasForeignKey<UserProfile>(d => d.UserId)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_user_profile");
-        });
-
-        modelBuilder.Entity<UserVibe>(entity =>
-        {
-            entity.HasKey(uv => new { uv.UserProfileId, uv.FactorId }).HasName("user_vibes_pkey");
-            entity.HasOne(uv => uv.UserProfile)
-                .WithMany(up => up.UserVibes)
-                .HasForeignKey(uv => uv.UserProfileId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("fk_user_vibes_profile");
-            entity.HasOne(uv => uv.Factor)
-                .WithMany(f => f.UserVibes)
-                .HasForeignKey(uv => uv.FactorId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .HasConstraintName("fk_user_vibes_factor");
         });
 
         modelBuilder.Entity<Visit>(entity =>

@@ -12,20 +12,17 @@ public class JourneyService : IJourneyService
     private readonly IGoongMapsService _goongMapsService;
     private readonly IMicroExperienceRepository _microExperienceRepository;
     private readonly IWeatherService _weatherService;
-    private readonly IFactorRepository _factorRepository;
 
     public JourneyService(
         IJourneyRepository journeyRepository,
         IGoongMapsService goongMapsService,
         IMicroExperienceRepository microExperienceRepository,
-        IWeatherService weatherService,
-        IFactorRepository factorRepository)
+        IWeatherService weatherService)
     {
         _journeyRepository = journeyRepository;
         _goongMapsService = goongMapsService;
         _microExperienceRepository = microExperienceRepository;
         _weatherService = weatherService;
-        _factorRepository = factorRepository;
     }
 
     public async Task<JourneySetupResponse?> ValidateAndCreateJourneyAsync(JourneySetupRequest request, Guid? travelerId, CancellationToken cancellationToken = default)
@@ -55,16 +52,9 @@ public class JourneyService : IJourneyService
 
         var primaryRoute = routes[0];
 
-        Guid? currentMoodFactorId = null;
-        if (request.CurrentMood.HasValue)
-        {
-            var moodName = request.CurrentMood.Value.ToString();
-            var factor = await _factorRepository.GetMoodFactorByNameAsync(moodName, cancellationToken);
-            if (factor != null)
-            {
-                currentMoodFactorId = factor.Id;
-            }
-        }
+        var currentMood = request.CurrentMood.HasValue
+            ? request.CurrentMood.Value.ToString()
+            : null;
 
         var journey = new Models.Journey
         {
@@ -79,8 +69,7 @@ public class JourneyService : IJourneyService
             VehicleType = request.VehicleType.ToString().ToLowerInvariant(),
             TimeBudgetMinutes = request.TimeBudgetMinutes,
             MaxDetourDistanceMeters = request.MaxDetourDistanceMeters,
-            CurrentMoodFactorId = currentMoodFactorId,
-            PreferredStopDurationMinutes = request.PreferredStopDurationMinutes,
+            CurrentMood = currentMood,
             MaxStops = request.MaxStopCount > 0 ? request.MaxStopCount : null,
             Status = "planning"
         };
@@ -102,7 +91,6 @@ public class JourneyService : IJourneyService
             TimeBudgetMinutes = saved.TimeBudgetMinutes,
             MaxDetourDistanceMeters = saved.MaxDetourDistanceMeters,
             CurrentMood = request.CurrentMood,
-            PreferredStopDurationMinutes = saved.PreferredStopDurationMinutes,
             MaxStopCount = request.MaxStopCount,
             Routes = routes
         };
@@ -121,8 +109,7 @@ public class JourneyService : IJourneyService
             DestinationAddress = j.DestinationAddress,
             VehicleType = Enum.TryParse<VehicleType>(j.VehicleType, true, out var vt) ? vt : null,
             TimeBudgetMinutes = j.TimeBudgetMinutes,
-            CurrentMood = j.CurrentMoodFactor != null &&
-                          Enum.TryParse<MoodType>(j.CurrentMoodFactor.Name, true, out var mood)
+            CurrentMood = !string.IsNullOrEmpty(j.CurrentMood) && Enum.TryParse<MoodType>(j.CurrentMood, true, out var mood)
                 ? mood
                 : null,
             Status = Enum.TryParse<JourneyStatus>(j.Status, true, out var js) ? js : null,
@@ -147,11 +134,9 @@ public class JourneyService : IJourneyService
             EstimatedDurationMinutes = j.EstimatedDurationMinutes,
             TimeBudgetMinutes = j.TimeBudgetMinutes,
             MaxDetourDistanceMeters = j.MaxDetourDistanceMeters,
-            CurrentMood = j.CurrentMoodFactor != null &&
-                          Enum.TryParse<MoodType>(j.CurrentMoodFactor.Name, true, out var mood)
+            CurrentMood = !string.IsNullOrEmpty(j.CurrentMood) && Enum.TryParse<MoodType>(j.CurrentMood, true, out var mood)
                 ? mood
                 : null,
-            PreferredStopDurationMinutes = j.PreferredStopDurationMinutes,
             Status = Enum.TryParse<JourneyStatus>(j.Status, true, out var js) ? js : null,
             StartedAt = j.StartedAt,
             CompletedAt = j.CompletedAt,

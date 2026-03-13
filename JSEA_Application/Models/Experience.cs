@@ -60,6 +60,9 @@ public partial class Experience
     [Column("tags")]
     public List<string>? Tags { get; set; }
 
+    [Column("amenity_tags", TypeName = "text[]")]
+    public List<string>? AmenityTags { get; set; }
+
     [Column("status")]
     [StringLength(20)]
     public string Status { get; set; } = "active"; // active | inactive
@@ -85,7 +88,7 @@ public partial class Experience
     public virtual ExperienceDetail? ExperienceDetail { get; set; }
 
     [InverseProperty("Experience")]
-    public virtual ICollection<ExperienceTag> ExperienceTags { get; set; } = new List<ExperienceTag>();
+    public virtual ExperienceEmbedding? ExperienceEmbedding { get; set; }
 
     [InverseProperty("Experience")]
     public virtual ExperienceMetric? ExperienceMetric { get; set; }

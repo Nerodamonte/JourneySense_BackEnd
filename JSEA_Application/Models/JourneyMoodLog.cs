@@ -15,8 +15,9 @@ public partial class JourneyMoodLog
     [Column("journey_id")]
     public Guid JourneyId { get; set; }
 
-    [Column("factor_id")]
-    public Guid FactorId { get; set; }
+    [Column("mood")]
+    [StringLength(20)]
+    public string? Mood { get; set; }
 
     [Column("recorded_at")]
     public DateTime RecordedAt { get; set; }
@@ -28,8 +29,4 @@ public partial class JourneyMoodLog
     [ForeignKey("JourneyId")]
     [InverseProperty("JourneyMoodLogs")]
     public virtual Journey Journey { get; set; } = null!;
-
-    [ForeignKey("FactorId")]
-    [InverseProperty("JourneyMoodLogs")]
-    public virtual Factor Factor { get; set; } = null!;
 }

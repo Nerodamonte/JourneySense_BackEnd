@@ -12,8 +12,8 @@ public partial class ExperienceDetail
     [Column("experience_id")]
     public Guid ExperienceId { get; set; }
 
-    [Column("description")]
-    public string? Description { get; set; }
+    [Column("rich_description")]
+    public string? RichDescription { get; set; }
 
     [Column("opening_hours", TypeName = "jsonb")]
     public string? OpeningHours { get; set; }
@@ -25,9 +25,6 @@ public partial class ExperienceDetail
     [Column("crowd_level")]
     [StringLength(20)]
     public string CrowdLevel { get; set; } = "normal"; // quiet|normal|busy
-
-    [Column("estimated_duration_minutes")]
-    public int EstimatedDurationMinutes { get; set; }
 
     [Column("safety_notes")]
     public string? SafetyNotes { get; set; }

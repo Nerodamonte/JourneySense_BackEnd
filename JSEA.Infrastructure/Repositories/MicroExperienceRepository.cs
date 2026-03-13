@@ -35,18 +35,12 @@ public class MicroExperienceRepository : IMicroExperienceRepository
         if (!string.IsNullOrWhiteSpace(filter.Status))
             query = query.Where(x => x.Status == filter.Status);
 
-        if (!string.IsNullOrWhiteSpace(filter.Mood))
-        {
-            query = query.Where(x => x.ExperienceTags.Any(et => et.Factor.Name == filter.Mood && et.Factor.Type == "mood"));
-        }
-
         if (!string.IsNullOrWhiteSpace(filter.TimeOfDay))
         {
             query = query.Where(x => x.PreferredTimes != null && x.PreferredTimes.Contains(filter.TimeOfDay));
         }
 
         return await query
-            .Include(x => x.ExperienceTags).ThenInclude(et => et.Factor)
             .OrderBy(x => x.Name)
             .ToListAsync(cancellationToken);
     }
@@ -57,7 +51,6 @@ public class MicroExperienceRepository : IMicroExperienceRepository
             .Include(x => x.Category)
             .Include(x => x.ExperienceDetail)
             .Include(x => x.ExperienceMetric)
-            .Include(x => x.ExperienceTags).ThenInclude(et => et.Factor)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
@@ -112,15 +105,8 @@ public class MicroExperienceRepository : IMicroExperienceRepository
             .AsNoTracking()
             .Include(e => e.Category)
             .Include(e => e.ExperienceDetail)
-            .Include(e => e.ExperienceTags)
             .Where(e => e.Location != null && e.Status == "active")
             .Where(e => e.Location!.Distance(journey.RoutePath) <= maxDetour);
-
-        if (journey.CurrentMoodFactorId.HasValue)
-        {
-            var moodId = journey.CurrentMoodFactorId.Value;
-            query = query.Where(e => e.ExperienceTags.Any(et => et.FactorId == moodId));
-        }
 
         if (!string.IsNullOrWhiteSpace(weatherStr))
         {
@@ -154,9 +140,7 @@ public class MicroExperienceRepository : IMicroExperienceRepository
             Latitude = e.Location.Y,
             Longitude = e.Location.X,
             DetourDistanceMeters = (int)Math.Round(e.Location.Distance(journey.RoutePath)),
-            EstimatedStopMinutes = e.ExperienceDetail?.EstimatedDurationMinutes
-                ?? journey.PreferredStopDurationMinutes
-                ?? 15
+            EstimatedStopMinutes = 15
         }).ToList();
     }
 

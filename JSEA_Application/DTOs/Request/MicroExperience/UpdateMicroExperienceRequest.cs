@@ -29,6 +29,6 @@ public class UpdateMicroExperienceRequest
     /// <summary>Mùa phù hợp.</summary>
     public List<string>? Seasonality { get; set; }
 
-    /// <summary>Factor IDs (vibe/mood) từ bảng factors - tag cho experience.</summary>
-    public List<Guid>? FactorIds { get; set; }
+    /// <summary>Tag tiện ích (amenity) cho experience.</summary>
+    public List<string>? AmenityTags { get; set; }
 }
