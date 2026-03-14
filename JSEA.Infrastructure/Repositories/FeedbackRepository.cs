@@ -1,5 +1,6 @@
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace JSEA_Infrastructure.Repositories;
 
@@ -26,5 +27,17 @@ public class FeedbackRepository : IFeedbackRepository
         }
         await _context.SaveChangesAsync(cancellationToken);
         return feedback;
+    }
+
+    public async Task<List<string>> GetTopByExperienceIdAsync(Guid experienceId, int topN, CancellationToken cancellationToken = default)
+    {
+        return await _context.Feedbacks
+            .AsNoTracking()
+            .Include(f => f.Visit)
+            .Where(f => f.Visit.ExperienceId == experienceId && f.IsFlagged != true)
+            .OrderByDescending(f => f.CreatedAt)
+            .Take(topN)
+            .Select(f => f.FeedbackText)
+            .ToListAsync(cancellationToken);
     }
 }

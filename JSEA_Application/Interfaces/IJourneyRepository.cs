@@ -1,10 +1,27 @@
-using JSEA_Application.Models;
+﻿using JSEA_Application.Models;
 
 namespace JSEA_Application.Interfaces;
 
 public interface IJourneyRepository
 {
-    Task<Journey> SaveAsync(Journey journey, List<JourneyWaypoint> waypoints, CancellationToken cancellationToken = default);
+    Task<Journey> SaveAsync(Journey journey, List<JourneyWaypoint> waypoints, List<RouteSegment>? segments = null, CancellationToken cancellationToken = default);
     Task<Journey?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<List<Journey>> GetByTravelerIdAsync(Guid travelerId, CancellationToken cancellationToken = default);
-}
+    /// <summary>Lấy danh sách experience_id đã được gợi ý trong journey (tránh suggest trùng).</summary>
+    Task<List<Guid>> GetSuggestedExperienceIdsAsync(Guid journeyId, CancellationToken cancellationToken = default);
+
+    /// <summary>Tổng số phút đã dùng = Σ planned_stop_minutes + Σ detour_time_minutes của các waypoint đã accept.</summary>
+    Task<int> GetUsedMinutesAsync(Guid journeyId, CancellationToken cancellationToken = default);
+
+    /// <summary>Đếm số waypoint đã accept trong journey (để check max_stops).</summary>
+    Task<int> GetAcceptedWaypointCountAsync(Guid journeyId, CancellationToken cancellationToken = default);
+
+    /// <summary>Lưu một JourneySuggestion mới.</summary>
+    Task<JourneySuggestion> SaveSuggestionAsync(JourneySuggestion suggestion, CancellationToken cancellationToken = default);
+
+    /// <summary>Lấy JourneySuggestion theo id, kèm Experience + Detail + Metric và Journey.</summary>
+    Task<JourneySuggestion?> GetSuggestionByIdAsync(Guid suggestionId, CancellationToken cancellationToken = default);
+
+    /// <summary>Cập nhật ai_insight của một suggestion sau khi RAG generate xong.</summary>
+    Task UpdateSuggestionInsightAsync(Guid suggestionId, string insight, CancellationToken cancellationToken = default);
+}   

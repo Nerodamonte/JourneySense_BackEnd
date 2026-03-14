@@ -11,18 +11,17 @@ public class JourneyService : IJourneyService
     private readonly IJourneyRepository _journeyRepository;
     private readonly IGoongMapsService _goongMapsService;
     private readonly IMicroExperienceRepository _microExperienceRepository;
-    private readonly IWeatherService _weatherService;
+
 
     public JourneyService(
         IJourneyRepository journeyRepository,
         IGoongMapsService goongMapsService,
-        IMicroExperienceRepository microExperienceRepository,
-        IWeatherService weatherService)
+        IMicroExperienceRepository microExperienceRepository)
+
     {
         _journeyRepository = journeyRepository;
         _goongMapsService = goongMapsService;
         _microExperienceRepository = microExperienceRepository;
-        _weatherService = weatherService;
     }
 
     public async Task<JourneySetupResponse?> ValidateAndCreateJourneyAsync(JourneySetupRequest request, Guid? travelerId, CancellationToken cancellationToken = default)
@@ -71,12 +70,30 @@ public class JourneyService : IJourneyService
             MaxDetourDistanceMeters = request.MaxDetourDistanceMeters,
             CurrentMood = currentMood,
             MaxStops = request.MaxStopCount > 0 ? request.MaxStopCount : null,
+            PreferredCrowdLevel = request.PreferredCrowdLevel.ToString().ToLowerInvariant(),
             Status = "planning"
         };
 
         var waypoints = new List<JourneyWaypoint>();
 
-        var saved = await _journeyRepository.SaveAsync(journey, waypoints, cancellationToken);
+        // Tạo RouteSegment từ RoutePath của primaryRoute.
+        // SuggestService cần segment.SegmentPath để hard-filter + tính distance.
+        var segments = new List<RouteSegment>();
+        if (primaryRoute.RoutePath != null)
+        {
+            segments.Add(new RouteSegment
+            {
+                Id = Guid.NewGuid(),
+                JourneyId = journey.Id,
+                SegmentPath = primaryRoute.RoutePath,
+                SegmentOrder = 1,
+                DistanceMeters = primaryRoute.TotalDistanceMeters,
+                EstimatedDurationMinutes = primaryRoute.EstimatedDurationMinutes
+            });
+          
+        }
+
+        var saved = await _journeyRepository.SaveAsync(journey, waypoints, segments, cancellationToken);
 
         var summary = $"Tuyến ~{primaryRoute.TotalDistanceMeters / 1000.0:F1} km, ước tính ~{primaryRoute.EstimatedDurationMinutes} phút.";
 
@@ -144,23 +161,4 @@ public class JourneyService : IJourneyService
         };
     }
 
-    public async Task<List<RouteMicroExperienceSuggestionResponse>> GetSuggestionsAlongRouteAsync(Guid journeyId, int? limit, WeatherType? weather, TimeOfDay? timeOfDay, CancellationToken cancellationToken = default)
-    {
-        var journey = await _journeyRepository.GetByIdAsync(journeyId, cancellationToken);
-        if (journey == null)
-            return new List<RouteMicroExperienceSuggestionResponse>();
-
-        var maxCount = limit is > 0 and <= 50 ? limit.Value : 20;
-        var weatherStr = weather.HasValue ? weather.Value.ToString() : null;
-
-        if (weatherStr == null && journey.OriginLocation != null)
-        {
-            var current = await _weatherService.GetCurrentWeatherAsync(journey.OriginLocation.Y, journey.OriginLocation.X, cancellationToken);
-            if (current != null)
-                weatherStr = current.WeatherType.ToString();
-        }
-
-        var timeOfDayStr = timeOfDay.HasValue ? timeOfDay.Value.ToString() : null;
-        return await _microExperienceRepository.FindSuggestionsAlongRouteAsync(journeyId, maxCount, weatherStr, timeOfDayStr, cancellationToken);
-    }
 }

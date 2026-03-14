@@ -16,6 +16,7 @@ using Npgsql;
 using Pgvector;
 using System.Text;
 using System.Text.Json.Serialization;
+using JSEA_Application.Services.Journey;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,6 +42,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(dataSource, o =>
     {
         o.UseNetTopologySuite();
+        o.UseVector();
     })
 );
 
@@ -69,6 +71,13 @@ builder.Services.AddScoped<IGoongMapsService, JSEA_Infrastructure.Services.Goong
 builder.Services.AddScoped<IWeatherService, JSEA_Infrastructure.Services.OpenMeteo.OpenMeteoWeatherService>();
 builder.Services.AddScoped<IJourneyService, JSEA_Application.Services.Journey.JourneyService>();
 builder.Services.AddScoped<IJourneyRepository, JourneyRepository>();
+
+//Embedding
+builder.Services.AddScoped<IExperienceEmbeddingRepository, ExperienceEmbeddingRepository>();
+builder.Services.AddScoped<EmbeddingGeneratorService>();
+
+//Suggest pipeline
+builder.Services.AddScoped<ISuggestService, SuggestService>();
 
 // Rate & Feedback
 builder.Services.AddScoped<IVisitRepository, VisitRepository>();

@@ -23,5 +23,5 @@ public interface IJourneyService
     /// <summary>
     /// Gợi ý micro-experiences dọc/gần tuyến theo journey: lọc theo vibe (current_mood), weather, timeOfDay, khoảng cách lệch, status. Sắp xếp theo khoảng cách.
     /// </summary>
-    Task<List<RouteMicroExperienceSuggestionResponse>> GetSuggestionsAlongRouteAsync(Guid journeyId, int? limit, JSEA_Application.Enums.WeatherType? weather, JSEA_Application.Enums.TimeOfDay? timeOfDay, CancellationToken cancellationToken = default);
+   
 }
