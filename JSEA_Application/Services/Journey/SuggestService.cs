@@ -357,7 +357,7 @@ $"https://generativelanguage.googleapis.com/v1beta/models/{GeminiEmbedModel}:emb
             sb.AppendLine($"- Thoi diem trong ngay: {timeOfDay}");
             sb.AppendLine($"- Mua: {season}");
             sb.AppendLine();
-            sb.AppendLine("Hay viet insight ngan gon, tu nhien, goi cam xuc. Khong liet ke, khong dung bullet point.");
+            sb.AppendLine("Hay viet insight ngan gon, tu nhien, goi cam xuc. Khong liet ke, noi ro dia diem do phu hop voi so thich du lich nao, cung nhu la mood nao cua nguoi dung do, khong dung bullet point.");
             return sb.ToString();
         }
 

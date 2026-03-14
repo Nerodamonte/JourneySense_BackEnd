@@ -34,7 +34,7 @@ namespace JSEA_Application.Services.Profile
             UpdateProfileRequest request,
             CancellationToken cancellationToken = default)
         {
-            // Lấy hoặc tạo profile
+        
             var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
             var isNew = profile == null;
 
@@ -44,7 +44,6 @@ namespace JSEA_Application.Services.Profile
                 UserId = userId
             };
 
-            // Cập nhật các field thông thường (chỉ override nếu request có giá trị)
             if (request.FullName != null)
                 profile.FullName = request.FullName;
 
@@ -71,9 +70,7 @@ namespace JSEA_Application.Services.Profile
                 await _userProfileRepository.UpdateAsync(profile, cancellationToken);
         }
 
-        // ================================================================
-        // PRIVATE
-        // ================================================================
+       
 
         private async Task<string?> GenerateTravelStyleTextAsync(
             List<JSEA_Application.Enums.VibeType> travelStyle,
