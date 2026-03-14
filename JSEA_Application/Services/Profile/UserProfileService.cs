@@ -82,9 +82,9 @@ namespace JSEA_Application.Services.Profile
             var styleList = string.Join(", ", travelStyle.Select(v => v.ToString()));
 
             var prompt = $"""
-            Ban la he thong du lich. Hay viet mot doan mo ta ngan (2-3 cau, tieng Viet khong dau)
+            Ban la he thong du lich. Hay viet mot doan mo ta ngan (3-4 cau, tieng Viet khong dau)
             mo ta phong cach du lich cua mot nguoi co cac so thich du lich sau: {styleList}.
-            Mo ta phai the hien ro rang ho thich loai dia diem nao, khong khi nhu the nao, va trai nghiem gi, nhung dia diem do phu hop voi so thich nao cua ban.
+            Mo ta phai the hien ro rang ho thich loai dia diem nao, khong khi nhu the nao, va trai nghiem gi, nhung dia diem do phu hop nhu the nao voi so thich du lich cua nguoi dung do.
             Chi viet doan mo ta, khong giai thich them.
             """;
 

@@ -76,21 +76,24 @@ public class JourneyService : IJourneyService
 
         var waypoints = new List<JourneyWaypoint>();
 
-        // Tạo RouteSegment từ RoutePath của primaryRoute.
-        // SuggestService cần segment.SegmentPath để hard-filter + tính distance.
+        // Tạo RouteSegment cho từng route, gán segmentId vào RouteContext để FE dùng gọi suggest.
         var segments = new List<RouteSegment>();
-        if (primaryRoute.RoutePath != null)
+        foreach (var route in routes)
         {
-            segments.Add(new RouteSegment
+            if (route.RoutePath == null) continue;
+
+            var segment = new RouteSegment
             {
                 Id = Guid.NewGuid(),
                 JourneyId = journey.Id,
-                SegmentPath = primaryRoute.RoutePath,
-                SegmentOrder = 1,
-                DistanceMeters = primaryRoute.TotalDistanceMeters,
-                EstimatedDurationMinutes = primaryRoute.EstimatedDurationMinutes
-            });
-          
+                SegmentPath = route.RoutePath,
+                SegmentOrder = routes.IndexOf(route) + 1,
+                DistanceMeters = route.TotalDistanceMeters,
+                EstimatedDurationMinutes = route.EstimatedDurationMinutes
+            };
+
+            segments.Add(segment);
+            route.SegmentId = segment.Id; // gán vào response
         }
 
         var saved = await _journeyRepository.SaveAsync(journey, waypoints, segments, cancellationToken);

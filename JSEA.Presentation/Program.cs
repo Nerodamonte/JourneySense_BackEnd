@@ -17,6 +17,7 @@ using Pgvector;
 using System.Text;
 using System.Text.Json.Serialization;
 using JSEA_Application.Services.Journey;
+using JSEA_Application.Services.Profile;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,7 +50,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 #endregion
 
 #region Dependency Injection
-
+//Auth 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -57,6 +58,9 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
 builder.Services.AddScoped<IEmailOtpRepository, EmailOtpRepository>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+//Profile
+builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 
 // Micro-Experience
 builder.Services.AddScoped<IMicroExperienceService, JSEA_Application.Services.MicroExperience.MicroExperienceService>();
