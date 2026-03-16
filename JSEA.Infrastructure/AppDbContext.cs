@@ -167,6 +167,7 @@ public partial class AppDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("experience_embeddings_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.EmbeddedAt).HasDefaultValueSql("now()");
+            entity.Property(e => e.Embedding).HasColumnType("vector(3072)");
             entity.HasIndex(e => e.ExperienceId).IsUnique().HasDatabaseName("experience_embeddings_exp_unique");
             entity.HasOne(d => d.Experience)
                 .WithOne(p => p.ExperienceEmbedding)

@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-
+using Pgvector;
 namespace JSEA_Application.Models;
 
 [Table("experience_embeddings")]
@@ -17,12 +17,9 @@ public class ExperienceEmbedding
     [Column("metadata_string", TypeName = "text")]
     public string MetadataString { get; set; } = null!;
 
-    /// <summary>
-    /// Embedding vector (768-d). Tạm thời không map bằng EF để tránh lỗi,
-    /// nếu cần dùng có thể thao tác qua raw SQL hoặc cấu hình type mapping sau.
-    /// </summary>
-    [NotMapped]
-    public float[] Embedding { get; set; } = Array.Empty<float>();
+   
+    [Column("embedding", TypeName = "vector(3072)")]
+    public Vector Embedding { get; set; } = null!;
 
     [Column("embedded_at")]
     public DateTime EmbeddedAt { get; set; }

@@ -16,6 +16,8 @@ using Npgsql;
 using Pgvector;
 using System.Text;
 using System.Text.Json.Serialization;
+using JSEA_Application.Services.Journey;
+using JSEA_Application.Services.Profile;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -41,13 +43,14 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(dataSource, o =>
     {
         o.UseNetTopologySuite();
+        o.UseVector();
     })
 );
 
 #endregion
 
 #region Dependency Injection
-
+//Auth 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -55,6 +58,9 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
 builder.Services.AddScoped<IEmailOtpRepository, EmailOtpRepository>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+//Profile
+builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 
 // Micro-Experience
 builder.Services.AddScoped<IMicroExperienceService, JSEA_Application.Services.MicroExperience.MicroExperienceService>();
@@ -69,6 +75,13 @@ builder.Services.AddScoped<IGoongMapsService, JSEA_Infrastructure.Services.Goong
 builder.Services.AddScoped<IWeatherService, JSEA_Infrastructure.Services.OpenMeteo.OpenMeteoWeatherService>();
 builder.Services.AddScoped<IJourneyService, JSEA_Application.Services.Journey.JourneyService>();
 builder.Services.AddScoped<IJourneyRepository, JourneyRepository>();
+
+//Embedding
+builder.Services.AddScoped<IExperienceEmbeddingRepository, ExperienceEmbeddingRepository>();
+builder.Services.AddScoped<EmbeddingGeneratorService>();
+
+//Suggest pipeline
+builder.Services.AddScoped<ISuggestService, SuggestService>();
 
 // Rate & Feedback
 builder.Services.AddScoped<IVisitRepository, VisitRepository>();

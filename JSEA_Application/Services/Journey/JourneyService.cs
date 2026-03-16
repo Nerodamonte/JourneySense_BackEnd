@@ -11,18 +11,33 @@ public class JourneyService : IJourneyService
     private readonly IJourneyRepository _journeyRepository;
     private readonly IGoongMapsService _goongMapsService;
     private readonly IMicroExperienceRepository _microExperienceRepository;
-    private readonly IWeatherService _weatherService;
+    private readonly IExperienceEmbeddingRepository _embeddingRepository;
+
 
     public JourneyService(
         IJourneyRepository journeyRepository,
         IGoongMapsService goongMapsService,
         IMicroExperienceRepository microExperienceRepository,
-        IWeatherService weatherService)
+        IExperienceEmbeddingRepository embeddingRepository)
+
     {
         _journeyRepository = journeyRepository;
         _goongMapsService = goongMapsService;
         _microExperienceRepository = microExperienceRepository;
-        _weatherService = weatherService;
+        _embeddingRepository = embeddingRepository;
+    }
+
+    private static int EstimateDetourMinutes(int detourMeters, string vehicleType)
+    {
+        var speedKmh = vehicleType.ToLowerInvariant() switch
+        {
+            "walking" => 5.0,
+            "bicycle" => 15.0,
+            "motorbike" => 35.0,
+            "car" => 40.0,
+            _ => 30.0
+        };
+        return (int)Math.Ceiling(detourMeters / 1000.0 / speedKmh * 60);
     }
 
     public async Task<JourneySetupResponse?> ValidateAndCreateJourneyAsync(JourneySetupRequest request, Guid? travelerId, CancellationToken cancellationToken = default)
@@ -41,13 +56,47 @@ public class JourneyService : IJourneyService
         if (routes == null || routes.Count == 0)
             return null;
 
-        // Tính số lượng experiences phù hợp dọc theo từng tuyến (dựa trên filter cứng + status).
+        // ExperienceCount ở setup: dọc tuyến + hard constraints + (time-budget) + chỉ tính những experience đã có embedding.
+        // Không giới hạn topK ở đây; count phản ánh số điểm có thể tính cosine/finalSimilarity để FE pin/ranking về sau.
         foreach (var route in routes)
         {
-            route.ExperienceCount = await _microExperienceRepository.CountAlongRouteAsync(
-                route.RoutePath,
-                request.MaxDetourDistanceMeters,
-                cancellationToken);
+            if (route.RoutePath == null)
+            {
+                route.ExperienceCount = 0;
+                continue;
+            }
+
+            // totalTimeBudget = base route time (Goong) + detour + stop.
+            var baseRouteMinutes = route.EstimatedDurationMinutes;
+            var remainingExtraMinutes = request.TimeBudgetMinutes - baseRouteMinutes;
+
+            if (remainingExtraMinutes <= 0)
+            {
+                route.ExperienceCount = 0;
+                continue;
+            }
+
+            var candidates = await _microExperienceRepository.FindCandidatesAsync(
+                vehicleType: request.VehicleType.ToString().ToLowerInvariant(),
+                preferredCrowdLevel: request.PreferredCrowdLevel.ToString().ToLowerInvariant(),
+                segmentPath: route.RoutePath,
+                maxDetourDistanceMeters: request.MaxDetourDistanceMeters,
+                excludeIds: new List<Guid>(),
+                cancellationToken: cancellationToken);
+
+            // Filter theo remainingExtraMinutes (detour time) tương tự suggest.
+            var filteredCandidateIds = candidates
+                .Where(e =>
+                {
+                    var distanceDeg = e.Location.Distance(route.RoutePath);
+                    var distanceM = (int)Math.Round(distanceDeg * 111_000);
+                    var detour = EstimateDetourMinutes(distanceM, request.VehicleType.ToString().ToLowerInvariant());
+                    return detour <= remainingExtraMinutes;
+                })
+                .Select(e => e.Id)
+                .ToList();
+
+            route.ExperienceCount = await _embeddingRepository.CountExistingAsync(filteredCandidateIds, cancellationToken);
         }
 
         var primaryRoute = routes[0];
@@ -71,12 +120,33 @@ public class JourneyService : IJourneyService
             MaxDetourDistanceMeters = request.MaxDetourDistanceMeters,
             CurrentMood = currentMood,
             MaxStops = request.MaxStopCount > 0 ? request.MaxStopCount : null,
+            PreferredCrowdLevel = request.PreferredCrowdLevel.ToString().ToLowerInvariant(),
             Status = "planning"
         };
 
         var waypoints = new List<JourneyWaypoint>();
 
-        var saved = await _journeyRepository.SaveAsync(journey, waypoints, cancellationToken);
+        // Tạo RouteSegment cho từng route, gán segmentId vào RouteContext để FE dùng gọi suggest.
+        var segments = new List<RouteSegment>();
+        foreach (var route in routes)
+        {
+            if (route.RoutePath == null) continue;
+
+            var segment = new RouteSegment
+            {
+                Id = Guid.NewGuid(),
+                JourneyId = journey.Id,
+                SegmentPath = route.RoutePath,
+                SegmentOrder = routes.IndexOf(route) + 1,
+                DistanceMeters = route.TotalDistanceMeters,
+                EstimatedDurationMinutes = route.EstimatedDurationMinutes
+            };
+
+            segments.Add(segment);
+            route.SegmentId = segment.Id; // gán vào response
+        }
+
+        var saved = await _journeyRepository.SaveAsync(journey, waypoints, segments, cancellationToken);
 
         var summary = $"Tuyến ~{primaryRoute.TotalDistanceMeters / 1000.0:F1} km, ước tính ~{primaryRoute.EstimatedDurationMinutes} phút.";
 
@@ -144,23 +214,105 @@ public class JourneyService : IJourneyService
         };
     }
 
-    public async Task<List<RouteMicroExperienceSuggestionResponse>> GetSuggestionsAlongRouteAsync(Guid journeyId, int? limit, WeatherType? weather, TimeOfDay? timeOfDay, CancellationToken cancellationToken = default)
+    public async Task<bool> SaveSelectedWaypointsAsync(
+        Guid journeyId,
+        Guid travelerId,
+        Guid segmentId,
+        List<SaveWaypointItemRequest> waypoints,
+        CancellationToken cancellationToken = default)
     {
         var journey = await _journeyRepository.GetByIdAsync(journeyId, cancellationToken);
-        if (journey == null)
-            return new List<RouteMicroExperienceSuggestionResponse>();
+        if (journey == null) return false;
+        if (journey.TravelerId != travelerId) return false;
 
-        var maxCount = limit is > 0 and <= 50 ? limit.Value : 20;
-        var weatherStr = weather.HasValue ? weather.Value.ToString() : null;
+        var segment = journey.RouteSegments.FirstOrDefault(s => s.Id == segmentId);
+        if (segment?.SegmentPath == null) return false;
 
-        if (weatherStr == null && journey.OriginLocation != null)
+        waypoints ??= new List<SaveWaypointItemRequest>();
+
+        if (journey.MaxStops.HasValue && waypoints.Count > journey.MaxStops.Value)
+            return false;
+
+        var suggestionIds = waypoints.Select(w => w.SuggestionId).Distinct().ToList();
+        if (suggestionIds.Count != waypoints.Count)
+            return false;
+
+        var stopOrders = waypoints.Select(w => w.StopOrder).ToList();
+        if (stopOrders.Count != stopOrders.Distinct().Count())
+            return false;
+
+        var suggestions = await _journeyRepository.GetSuggestionsByIdsAsync(suggestionIds, cancellationToken);
+        if (suggestions.Count != suggestionIds.Count)
+            return false;
+
+        // Validate suggestions belong to the same journey & selected segment.
+        if (suggestions.Any(s => s.JourneyId != journeyId || s.SegmentId != segmentId))
+            return false;
+
+        // totalTimeBudget = base route minutes + Σ detour + Σ plannedStopMinutes
+        var baseMinutes = segment.EstimatedDurationMinutes ?? 0;
+        var totalDetourMinutes = suggestions.Sum(s => s.DetourTimeMinutes ?? 0);
+        var totalStopMinutes = waypoints.Sum(w => w.PlannedStopMinutes ?? 0);
+        var totalTripMinutes = baseMinutes + totalDetourMinutes + totalStopMinutes;
+
+        var budgetMinutes = journey.TimeBudgetMinutes ?? 0;
+        if (budgetMinutes > 0 && totalTripMinutes > budgetMinutes)
+            return false;
+
+        // Persist selected route into journey fields (so later steps use the chosen route).
+        journey.RoutePath = segment.SegmentPath;
+        journey.TotalDistanceMeters = segment.DistanceMeters;
+        journey.EstimatedDurationMinutes = segment.EstimatedDurationMinutes;
+        journey.UpdatedAt = DateTime.UtcNow;
+
+        var suggestionsById = suggestions.ToDictionary(s => s.Id, s => s);
+
+        var newWaypoints = waypoints
+            .OrderBy(w => w.StopOrder)
+            .Select(w =>
+            {
+                var s = suggestionsById[w.SuggestionId];
+                return new JourneyWaypoint
+                {
+                    Id = Guid.NewGuid(),
+                    JourneyId = journeyId,
+                    ExperienceId = s.ExperienceId,
+                    SuggestionId = s.Id,
+                    StopOrder = w.StopOrder,
+                    PlannedStopMinutes = w.PlannedStopMinutes
+                };
+            })
+            .ToList();
+
+        var interactions = suggestionIds.Select(id => new SuggestionInteraction
         {
-            var current = await _weatherService.GetCurrentWeatherAsync(journey.OriginLocation.Y, journey.OriginLocation.X, cancellationToken);
-            if (current != null)
-                weatherStr = current.WeatherType.ToString();
-        }
+            Id = Guid.NewGuid(),
+            SuggestionId = id,
+            InteractionType = InteractionType.Accepted,
+            InteractedAt = DateTime.UtcNow
+        }).ToList();
 
-        var timeOfDayStr = timeOfDay.HasValue ? timeOfDay.Value.ToString() : null;
-        return await _microExperienceRepository.FindSuggestionsAlongRouteAsync(journeyId, maxCount, weatherStr, timeOfDayStr, cancellationToken);
+        await _journeyRepository.ReplaceWaypointsAsync(
+            journeyId,
+            newWaypoints,
+            interactions,
+            cancellationToken);
+
+        return true;
     }
+
+    public async Task<bool> LogSuggestionInteractionAsync(
+        Guid suggestionId,
+        Guid travelerId,
+        InteractionType interactionType,
+        CancellationToken cancellationToken = default)
+    {
+        var suggestion = await _journeyRepository.GetSuggestionByIdAsync(suggestionId, cancellationToken);
+        if (suggestion?.Journey == null) return false;
+        if (suggestion.Journey.TravelerId != travelerId) return false;
+
+        await _journeyRepository.AddSuggestionInteractionAsync(suggestionId, interactionType, cancellationToken);
+        return true;
+    }
+
 }

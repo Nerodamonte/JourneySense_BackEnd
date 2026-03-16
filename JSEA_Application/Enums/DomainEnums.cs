@@ -8,7 +8,9 @@ public enum PackageType { Basic, Pro }
 public enum InteractionType { Accepted, Skipped, Saved, ViewedDetails }
 public enum UserRole { Traveler, Staff, Admin }
 public enum UserStatus { PendingVerification, Active, Suspended, Deleted }
-public enum MoodType { Relax, Photography, Foodie, Adventure, Culture }
+public enum MoodType { Happy, Normal, Sad, Stressed }
+public enum VibeType { Chill, Relax, Explorer, Foodie, LocalVibes, Adventure, Photographer }
+public enum CrowdLevel { All, Quiet, Normal, Busy }
 public enum VehicleType { Walking, Bicycle, Motorbike, Car }
 public enum JourneyStatus { Planning, InProgress, Completed, Cancelled }
 public enum ActionType { Create, Update, Delete, Verify, Feature, Reject, Login, Logout }
