@@ -8,7 +8,8 @@ public interface IJourneyRepository
     Task<Journey?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<List<Journey>> GetByTravelerIdAsync(Guid travelerId, CancellationToken cancellationToken = default);
     /// <summary>Lấy danh sách experience_id đã được gợi ý trong journey (tránh suggest trùng).</summary>
-    Task<List<Guid>> GetSuggestedExperienceIdsAsync(Guid journeyId, CancellationToken cancellationToken = default);
+    /// <summary>Lấy experience_id đã suggest trong segment này (tránh suggest trùng trên cùng 1 tuyến).</summary>
+    Task<List<Guid>> GetSuggestedExperienceIdsAsync(Guid journeyId, Guid segmentId, CancellationToken cancellationToken = default);
 
     /// <summary>Tổng số phút đã dùng = Σ planned_stop_minutes + Σ detour_time_minutes của các waypoint đã accept.</summary>
     Task<int> GetUsedMinutesAsync(Guid journeyId, CancellationToken cancellationToken = default);
@@ -24,4 +25,4 @@ public interface IJourneyRepository
 
     /// <summary>Cập nhật ai_insight của một suggestion sau khi RAG generate xong.</summary>
     Task UpdateSuggestionInsightAsync(Guid suggestionId, string insight, CancellationToken cancellationToken = default);
-}   
+}

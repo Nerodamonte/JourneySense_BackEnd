@@ -67,11 +67,11 @@ public class JourneyRepository : IJourneyRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<List<Guid>> GetSuggestedExperienceIdsAsync(Guid journeyId, CancellationToken cancellationToken = default)
+    public async Task<List<Guid>> GetSuggestedExperienceIdsAsync(Guid journeyId, Guid segmentId, CancellationToken cancellationToken = default)
     {
         return await _context.JourneySuggestions
             .AsNoTracking()
-            .Where(s => s.JourneyId == journeyId)
+            .Where(s => s.JourneyId == journeyId && s.SegmentId == segmentId)
             .Select(s => s.ExperienceId)
             .ToListAsync(cancellationToken);
     }

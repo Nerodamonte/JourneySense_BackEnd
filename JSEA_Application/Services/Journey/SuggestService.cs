@@ -74,7 +74,7 @@ namespace JSEA_Application.Services.Journey
             if (remainingMinutes <= 0) return new List<SuggestionResponse>();
 
             // STEP 1: Hard filter
-            var alreadySuggested = await _journeyRepository.GetSuggestedExperienceIdsAsync(journeyId, cancellationToken);
+            var alreadySuggested = await _journeyRepository.GetSuggestedExperienceIdsAsync(journeyId, segmentId, cancellationToken);
 
             var candidates = await _experienceRepository.FindCandidatesAsync(
                 vehicleType: journey.VehicleType,
@@ -85,11 +85,12 @@ namespace JSEA_Application.Services.Journey
                 cancellationToken: cancellationToken);
 
             // Filter time budget
+            // NTS .Distance() trả về degrees, nhân 111_000 để convert sang meters
             candidates = candidates.Where(e =>
             {
-                var detour = EstimateDetourMinutes(
-                    (int)Math.Round(e.Location.Distance(segment.SegmentPath)),
-                    journey.VehicleType);
+                var distanceDeg = e.Location.Distance(segment.SegmentPath);
+                var distanceM = (int)Math.Round(distanceDeg * 111_000);
+                var detour = EstimateDetourMinutes(distanceM, journey.VehicleType);
                 return detour <= remainingMinutes;
             }).ToList();
 
@@ -121,7 +122,8 @@ namespace JSEA_Application.Services.Journey
                 var exp = candidates.FirstOrDefault(e => e.Id == experienceId);
                 if (exp == null) continue;
 
-                var distanceMeters = exp.Location.Distance(segment.SegmentPath);
+                // NTS .Distance() trả về degrees, nhân 111_000 để convert sang meters
+                var distanceMeters = exp.Location.Distance(segment.SegmentPath) * 111_000;
 
                 // Normalize distance score về [0, 1]:
                 // score = maxDetour / (maxDetour + distance)
@@ -134,15 +136,12 @@ namespace JSEA_Application.Services.Journey
                 var timeBoost = GetTimeBoost(exp, realtimeTimeOfDay);
                 var seasonBoost = GetSeasonBoost(exp, realtimeSeason);
                 var eventBoost = activeEventBoosts.TryGetValue(experienceId, out var eb) ? eb : 1.0m;
-                var qualityScore = exp.ExperienceMetric?.QualityScore ?? 0.5m;
-
                 var finalSimilarity = (decimal)cosineScore
                     * (decimal)distanceScore
                     * (decimal)weatherBoost
                     * (decimal)timeBoost
                     * (decimal)seasonBoost
-                    * eventBoost
-                    * qualityScore;
+                    * eventBoost;
 
                 scored.Add((exp, cosineScore, distanceMeters, finalSimilarity));
             }
@@ -183,7 +182,11 @@ namespace JSEA_Application.Services.Journey
                     Longitude = exp.Location.X,
                     CoverPhotoUrl = exp.ExperiencePhotos.FirstOrDefault(p => p.IsCover == true)?.PhotoUrl,
                     PriceRange = exp.ExperienceDetail?.PriceRange,
+                    CrowdLevel = exp.ExperienceDetail?.CrowdLevel,
+                    OpeningHours = exp.ExperienceDetail?.OpeningHours,
+                    AccessibleBy = exp.AccessibleBy,
                     AvgRating = exp.ExperienceMetric?.AvgRating,
+                    TotalRatings = exp.ExperienceMetric?.TotalRatings,
                     DetourDistanceMeters = suggestion.DetourDistanceMeters,
                     DetourTimeMinutes = suggestion.DetourTimeMinutes,
                     CosineScore = suggestion.CosineScore,
@@ -217,13 +220,33 @@ namespace JSEA_Application.Services.Journey
             var userProfile = await _userProfileRepository.GetByUserIdAsync(journey.TravelerId, cancellationToken);
             var realtimeWeather = await GetRealtimeWeatherStringAsync(journey, cancellationToken);
 
+            // Map vibe enum sang tiếng Việt để AI insight tự nhiên hơn
+            static string MapVibeToVietnamese(string vibe) => vibe.ToLower() switch
+            {
+                "chill" => "thích không gian yên tĩnh, thư thái",
+                "relax" => "thích nghỉ ngơi, thư giãn",
+                "explorer" => "thích khám phá, tìm hiểu",
+                "foodie" => "mê ẩm thực, thích thử đồ ăn mới",
+                "localvibes" => "thích trải nghiệm văn hóa địa phương",
+                "adventure" => "thích mạo hiểm, trải nghiệm mới lạ",
+                "photographer" => "thích chụp ảnh, săn góc đẹp",
+                _ => vibe
+            };
+
+            var travelStyleList = userProfile?.TravelStyle != null && userProfile.TravelStyle.Count > 0
+                ? string.Join(", ", userProfile.TravelStyle.Select(MapVibeToVietnamese))
+                : null;
+
             var prompt = BuildRagPrompt(
                 expName: exp.Name,
                 richDescription: exp.ExperienceDetail?.RichDescription,
-                avgRating: exp.ExperienceMetric?.AvgRating,
-                feedbacks: feedbacks,
+                priceRange: exp.ExperienceDetail?.PriceRange,
+                crowdLevel: exp.ExperienceDetail?.CrowdLevel,
+                detourDistanceMeters: suggestion.DetourDistanceMeters,
                 currentMood: journey.CurrentMood,
+                travelStyleList: travelStyleList,
                 travelStyleText: userProfile?.TravelStyleText,
+                vehicleType: journey.VehicleType,
                 weather: realtimeWeather,
                 timeOfDay: GetCurrentTimeOfDay(),
                 season: GetCurrentSeason()
@@ -328,36 +351,68 @@ $"https://generativelanguage.googleapis.com/v1beta/models/{GeminiEmbedModel}:emb
         private static string BuildRagPrompt(
             string expName,
             string? richDescription,
-            decimal? avgRating,
-            List<string> feedbacks,
+            string? priceRange,
+            string? crowdLevel,
+            int? detourDistanceMeters,
             string? currentMood,
+            string? travelStyleList,
             string? travelStyleText,
+            string? vehicleType,
             string? weather,
             string timeOfDay,
             string season)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("Ban la tro ly du lich. Hay viet mot doan insight ngan (2-3 cau, tieng Viet) gioi thieu dia diem sau cho du khach.");
-            sb.AppendLine();
-            sb.AppendLine($"Dia diem: {expName}");
+
+            // === DU LIEU DAU VAO ===
+            sb.AppendLine("=== THONG TIN DIA DIEM ===");
+            sb.AppendLine($"Ten: {expName}");
             if (!string.IsNullOrEmpty(richDescription))
                 sb.AppendLine($"Mo ta: {richDescription}");
-            if (avgRating.HasValue)
-                sb.AppendLine($"Danh gia trung binh: {avgRating:F1}/5");
-            if (feedbacks.Count > 0)
+            if (!string.IsNullOrEmpty(priceRange))
+                sb.AppendLine($"Gia: {priceRange}");
+            if (!string.IsNullOrEmpty(crowdLevel))
+                sb.AppendLine($"Muc do dong duc: {crowdLevel}");
+            sb.AppendLine();
+            sb.AppendLine("=== BOI CANH NGUOI DUNG ===");
+            if (!string.IsNullOrEmpty(travelStyleList))
+                sb.AppendLine($"Cac vibe du lich cu the cua nguoi dung (liet ke day du): {travelStyleList}");
+            if (!string.IsNullOrEmpty(travelStyleText))
+                sb.AppendLine($"Mo ta phong cach du lich: {travelStyleText}");
+            if (!string.IsNullOrEmpty(currentMood))
+                sb.AppendLine($"Tam trang: {currentMood}");
+            if (!string.IsNullOrEmpty(vehicleType))
+                sb.AppendLine($"Phuong tien: {vehicleType}");
+            if (detourDistanceMeters.HasValue)
             {
-                sb.AppendLine("Nhan xet tu du khach khac:");
-                feedbacks.ForEach(f => sb.AppendLine($"- {f}"));
+                var detourM = detourDistanceMeters.Value;
+                string detourNote;
+                if (detourM <= 300)
+                    detourNote = $"Do lech khoi tuyen chinh: {detourM}m — rat gan, gan nhu khong can di lech, rat dang ghe";
+                else if (detourM <= 800)
+                    detourNote = $"Do lech khoi tuyen chinh: {detourM}m — lech nhe, di them vai phut la toi, kha thuan tien";
+                else if (detourM <= 2000)
+                    detourNote = $"Do lech khoi tuyen chinh: {detourM}m — lech khoang 1-2km, can can nhac neu khong co nhieu thoi gian";
+                else
+                    detourNote = $"Do lech khoi tuyen chinh: {detourM}m — lech kha xa so voi tuyen, nen can nhac ky truoc khi quyet dinh ghe, chi nen di neu dia diem nay that su phu hop voi ban";
+                sb.AppendLine(detourNote);
             }
+            if (!string.IsNullOrEmpty(weather))
+                sb.AppendLine($"Thoi tiet: {weather}");
+            sb.AppendLine($"Thoi diem trong ngay: {timeOfDay}");
+            sb.AppendLine($"Mua hien tai: {season}");
             sb.AppendLine();
-            sb.AppendLine("Boi canh du khach:");
-            if (!string.IsNullOrEmpty(travelStyleText)) sb.AppendLine($"- Phong cach: {travelStyleText}");
-            if (!string.IsNullOrEmpty(currentMood)) sb.AppendLine($"- Tam trang: {currentMood}");
-            if (!string.IsNullOrEmpty(weather)) sb.AppendLine($"- Thoi tiet: {weather}");
-            sb.AppendLine($"- Thoi diem trong ngay: {timeOfDay}");
-            sb.AppendLine($"- Mua: {season}");
-            sb.AppendLine();
-            sb.AppendLine("Hay viet insight ngan gon, tu nhien, goi cam xuc. Khong liet ke, noi ro dia diem do phu hop voi so thich du lich nao, cung nhu la mood nao cua nguoi dung do, khong dung bullet point.");
+
+            // === INSTRUCTION CHAT CHE ===
+            sb.AppendLine("=== NHIEM VU ===");
+            sb.AppendLine("Viet mot doan van 2-3 cau tieng Viet co dau, tu nhien nhu nguoi ban noi chuyen.");
+            sb.AppendLine("Doan van BUOC PHAI de cap day du TAT CA cac yeu to sau (theo dung thu tu nay):");
+            sb.AppendLine("1. Phong cach du lich va tam trang cua nguoi dung co phu hop voi dia diem nay nhu the nao");
+            sb.AppendLine("2. Thoi tiet va thoi diem trong ngay co thuan loi de ghe khong");
+            sb.AppendLine("3. Gia ca va muc do dong duc co phu hop voi nguoi dung khong");
+            sb.AppendLine("4. Do lech so voi tuyen di — neu ro la chi can lech [so met] la toi duoc, gan hay xa, co dang ghé khong");
+            sb.AppendLine("Khong duoc bo qua bat ky yeu to nao trong 4 yeu to tren.");
+            sb.AppendLine("TUYET DOI KHONG in ra so thu tu, bullet point, tag, hay bat ky chu giai nao. Chi co doan van thuan tuy.");
             return sb.ToString();
         }
 

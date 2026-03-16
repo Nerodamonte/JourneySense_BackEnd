@@ -14,6 +14,9 @@ namespace JSEA_Application.DTOs.Respone.Journey
     {
         public Guid SuggestionId { get; set; }
         public Guid ExperienceId { get; set; }
+
+        /// <summary>Segment này thuộc route nào — FE dùng để pin marker đúng tuyến.</summary>
+        public Guid SegmentId { get; set; }
         public string? Name { get; set; }
         public string? CategoryName { get; set; }
         public string? Address { get; set; }
@@ -27,8 +30,20 @@ namespace JSEA_Application.DTOs.Respone.Journey
         /// <summary>Giá tham khảo. VD: Free | &lt;50k | 50-100k | &gt;100k</summary>
         public string? PriceRange { get; set; }
 
+        /// <summary>Mức độ đông đúc. quiet | normal | busy</summary>
+        public string? CrowdLevel { get; set; }
+
+        /// <summary>Giờ mở cửa theo từng ngày trong tuần (jsonb). VD: {"mon":"8:00-21:00",...}</summary>
+        public string? OpeningHours { get; set; }
+
+        /// <summary>Phương tiện có thể tiếp cận. VD: ["walking","motorbike","car"]</summary>
+        public List<string>? AccessibleBy { get; set; }
+
         /// <summary>Điểm đánh giá trung bình (1-5).</summary>
         public decimal? AvgRating { get; set; }
+
+        /// <summary>Tổng số lượt đánh giá.</summary>
+        public int? TotalRatings { get; set; }
 
         /// <summary>Khoảng cách lệch khỏi tuyến chính (mét).</summary>
         public int? DetourDistanceMeters { get; set; }
