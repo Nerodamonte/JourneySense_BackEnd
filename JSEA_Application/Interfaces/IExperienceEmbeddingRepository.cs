@@ -29,6 +29,20 @@ namespace JSEA_Application.Interfaces
         Task<List<(Guid ExperienceId, float CosineScore)>> SearchAsync(Vector userVector, IEnumerable<Guid> candidateIds, int topK, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// Lấy cosine score cho TOÀN BỘ experiences trong tập candidateIds (không giới hạn topK).
+        /// Chỉ trả về những experience đã có embedding.
+        /// </summary>
+        Task<List<(Guid ExperienceId, float CosineScore)>> GetCosineScoresAsync(
+            Vector userVector,
+            IEnumerable<Guid> candidateIds,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Đếm số experiences trong candidateIds đã có embedding (dùng cho ExperienceCount ở setup).
+        /// </summary>
+        Task<int> CountExistingAsync(IEnumerable<Guid> candidateIds, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Kiểm tra experience đã có embedding chưa.
         /// </summary>
         Task<bool> ExistsAsync(Guid experienceId, CancellationToken cancellationToken = default);

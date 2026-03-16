@@ -81,6 +81,41 @@ namespace JSEA_Infrastructure.Repositories
                 .ToList();
         }
 
+        public async Task<List<(Guid ExperienceId, float CosineScore)>> GetCosineScoresAsync(
+            Vector userVector,
+            IEnumerable<Guid> candidateIds,
+            CancellationToken cancellationToken = default)
+        {
+            var candidateList = candidateIds.ToList();
+            if (candidateList.Count == 0)
+                return new List<(Guid, float)>();
+
+            var results = await _context.ExperienceEmbeddings
+                .AsNoTracking()
+                .Where(e => candidateList.Contains(e.ExperienceId))
+                .Select(e => new
+                {
+                    e.ExperienceId,
+                    CosineScore = 1f - (float)e.Embedding.CosineDistance(userVector)
+                })
+                .ToListAsync(cancellationToken);
+
+            return results
+                .Select(e => (e.ExperienceId, e.CosineScore))
+                .ToList();
+        }
+
+        public async Task<int> CountExistingAsync(IEnumerable<Guid> candidateIds, CancellationToken cancellationToken = default)
+        {
+            var candidateList = candidateIds.Distinct().ToList();
+            if (candidateList.Count == 0)
+                return 0;
+
+            return await _context.ExperienceEmbeddings
+                .AsNoTracking()
+                .CountAsync(e => candidateList.Contains(e.ExperienceId), cancellationToken);
+        }
+
         public async Task<bool> ExistsAsync(Guid experienceId, CancellationToken cancellationToken = default)
         {
             return await _context.ExperienceEmbeddings

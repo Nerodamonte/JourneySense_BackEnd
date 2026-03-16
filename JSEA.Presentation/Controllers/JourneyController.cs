@@ -109,4 +109,71 @@ public class JourneyController : ControllerBase
             return NotFound(new { message = "Không tìm thấy gợi ý hoặc không thể tạo insight." });
         return Ok(new { insight });
     }
+
+    /// <summary>
+    /// User chọn các điểm muốn ghé (waypoints) sau khi xem suggestions.
+    /// Replace toàn bộ waypoint hiện tại của journey.
+    /// </summary>
+    [HttpPut("{journeyId:guid}/waypoints")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SaveWaypoints(
+        Guid journeyId,
+        [FromBody] SaveWaypointsRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var ok = await _journeyService.SaveSelectedWaypointsAsync(
+            journeyId,
+            travelerId,
+            request.SegmentId,
+            request.Waypoints,
+            cancellationToken);
+
+        if (!ok)
+            return BadRequest(new { message = "Không thể lưu waypoints (kiểm tra route/đề xuất/time budget)." });
+
+        return Ok(new { message = "Đã lưu waypoints." });
+    }
+
+    /// <summary>
+    /// Log interaction của user với suggestion (ViewedDetails/Saved/Accepted/Skipped...).
+    /// </summary>
+    [HttpPost("suggestions/{suggestionId:guid}/interactions")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> LogSuggestionInteraction(
+        Guid suggestionId,
+        [FromBody] LogSuggestionInteractionRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var ok = await _journeyService.LogSuggestionInteractionAsync(
+            suggestionId,
+            travelerId,
+            request.InteractionType,
+            cancellationToken);
+
+        if (!ok)
+            return BadRequest(new { message = "Không thể ghi nhận interaction." });
+
+        return Ok(new { message = "Đã ghi nhận interaction." });
+    }
 }

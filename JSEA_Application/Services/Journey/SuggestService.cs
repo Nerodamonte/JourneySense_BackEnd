@@ -70,8 +70,9 @@ namespace JSEA_Application.Services.Journey
 
             // Check time budget
             var usedMinutes = await _journeyRepository.GetUsedMinutesAsync(journeyId, cancellationToken);
-            var remainingMinutes = (journey.TimeBudgetMinutes ?? 0) - usedMinutes;
-            if (remainingMinutes <= 0) return new List<SuggestionResponse>();
+            var baseRouteMinutes = segment.EstimatedDurationMinutes ?? journey.EstimatedDurationMinutes ?? 0;
+            var remainingExtraMinutes = (journey.TimeBudgetMinutes ?? 0) - baseRouteMinutes - usedMinutes;
+            if (remainingExtraMinutes <= 0) return new List<SuggestionResponse>();
 
             // STEP 1: Hard filter
             var alreadySuggested = await _journeyRepository.GetSuggestedExperienceIdsAsync(journeyId, segmentId, cancellationToken);
@@ -91,7 +92,7 @@ namespace JSEA_Application.Services.Journey
                 var distanceDeg = e.Location.Distance(segment.SegmentPath);
                 var distanceM = (int)Math.Round(distanceDeg * 111_000);
                 var detour = EstimateDetourMinutes(distanceM, journey.VehicleType);
-                return detour <= remainingMinutes;
+                return detour <= remainingExtraMinutes;
             }).ToList();
 
             if (candidates.Count == 0) return new List<SuggestionResponse>();
@@ -103,8 +104,8 @@ namespace JSEA_Application.Services.Journey
 
             // STEP 3: Cosine search
             var candidateIds = candidates.Select(e => e.Id).ToList();
-            var cosineResults = await _embeddingRepository.SearchAsync(
-                userVector, candidateIds, topK: 20, cancellationToken);
+            var cosineResults = await _embeddingRepository.GetCosineScoresAsync(
+                userVector, candidateIds, cancellationToken);
 
             if (cosineResults.Count == 0) return new List<SuggestionResponse>();
 
@@ -114,13 +115,14 @@ namespace JSEA_Application.Services.Journey
             var realtimeTimeOfDay = GetCurrentTimeOfDay();
             var activeEventBoosts = await _experienceRepository.GetActiveEventBoostsAsync(candidateIds, cancellationToken);
 
+            var candidatesById = candidates.ToDictionary(e => e.Id, e => e);
             var scored = new List<(Models.Experience Exp, float Cosine, double Distance, decimal Final)>();
             var maxDetour = (double)journey.MaxDetourDistanceMeters;
 
             foreach (var (experienceId, cosineScore) in cosineResults)
             {
-                var exp = candidates.FirstOrDefault(e => e.Id == experienceId);
-                if (exp == null) continue;
+                if (!candidatesById.TryGetValue(experienceId, out var exp))
+                    continue;
 
                 // NTS .Distance() trả về degrees, nhân 111_000 để convert sang meters
                 var distanceMeters = exp.Location.Distance(segment.SegmentPath) * 111_000;
@@ -148,12 +150,11 @@ namespace JSEA_Application.Services.Journey
 
             var sorted = scored.OrderByDescending(x => x.Final).ToList();
 
-            // STEP 7: INSERT journey_suggestions + build response
-            var results = new List<SuggestionResponse>();
-
+            // STEP 7: INSERT journey_suggestions (batch) + build response
+            var suggestionsToSave = new List<JourneySuggestion>(sorted.Count);
             foreach (var (exp, cosine, distance, final) in sorted)
             {
-                var suggestion = new JourneySuggestion
+                suggestionsToSave.Add(new JourneySuggestion
                 {
                     Id = Guid.NewGuid(),
                     JourneyId = journeyId,
@@ -166,14 +167,23 @@ namespace JSEA_Application.Services.Journey
                     FinalSimilarity = final,
                     AiInsight = null,
                     SuggestedAt = DateTime.UtcNow
-                };
+                });
+            }
 
-                var saved = await _journeyRepository.SaveSuggestionAsync(suggestion, cancellationToken);
+            await _journeyRepository.SaveSuggestionsAsync(suggestionsToSave, cancellationToken);
+
+            var suggestionsByExpId = suggestionsToSave.ToDictionary(s => s.ExperienceId, s => s);
+            var results = new List<SuggestionResponse>(sorted.Count);
+            foreach (var (exp, _, _, final) in sorted)
+            {
+                if (!suggestionsByExpId.TryGetValue(exp.Id, out var s))
+                    continue;
 
                 results.Add(new SuggestionResponse
                 {
-                    SuggestionId = saved.Id,
+                    SuggestionId = s.Id,
                     ExperienceId = exp.Id,
+                    SegmentId = segmentId,
                     Name = exp.Name,
                     CategoryName = exp.Category?.Name,
                     Address = exp.Address,
@@ -187,10 +197,10 @@ namespace JSEA_Application.Services.Journey
                     AccessibleBy = exp.AccessibleBy,
                     AvgRating = exp.ExperienceMetric?.AvgRating,
                     TotalRatings = exp.ExperienceMetric?.TotalRatings,
-                    DetourDistanceMeters = suggestion.DetourDistanceMeters,
-                    DetourTimeMinutes = suggestion.DetourTimeMinutes,
-                    CosineScore = suggestion.CosineScore,
-                    DistanceScore = suggestion.DistanceScore,
+                    DetourDistanceMeters = s.DetourDistanceMeters,
+                    DetourTimeMinutes = s.DetourTimeMinutes,
+                    CosineScore = s.CosineScore,
+                    DistanceScore = s.DistanceScore,
                     FinalSimilarity = final,
                     AiInsight = null
                 });
