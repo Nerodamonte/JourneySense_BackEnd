@@ -148,7 +148,10 @@ namespace JSEA_Application.Services.Journey
                 scored.Add((exp, cosineScore, distanceMeters, finalSimilarity));
             }
 
-            var sorted = scored.OrderByDescending(x => x.Final).ToList();
+            var sorted = scored
+                .OrderByDescending(x => x.Final)
+                .Take(10)
+                .ToList();
 
             // STEP 7: INSERT journey_suggestions (batch) + build response
             var suggestionsToSave = new List<JourneySuggestion>(sorted.Count);
