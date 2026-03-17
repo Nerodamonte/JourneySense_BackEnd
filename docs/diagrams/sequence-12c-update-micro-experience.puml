@@ -5,15 +5,15 @@ skinparam responseMessageBelowArrow true
 skinparam linetype ortho
 
 actor "Operation Staff" as OpStaff
-participant "MicroExpManagementPage\n<<UI>>" as MicroUI
-participant "MicroExperienceController\n<<controller>>" as MicroController
-participant "MicroExperienceService\n<<service>>" as MicroService
-participant "MicroExperienceRepository\n<<repository>>" as MicroRepo
-participant "CategoryRepository\n<<repository>>" as CategoryRepo
-participant "GoongMapsService\n<<service>>" as GoongMaps
+participant "<<UI>>\n:MicroExpManagementPage" as MicroUI
+participant "<<controller>>\n:MicroExperienceController" as MicroController
+participant "<<service>>\n:MicroExperienceService" as MicroService
+participant "<<repository>>\n:MicroExperienceRepository" as MicroRepo
+participant "<<repository>>\n:CategoryRepository" as CategoryRepo
+participant "<<service>>\n:GoongMapsService" as GoongMaps
 database "JSEADatabase" as DB
 
-OpStaff -> MicroUI : 1. updateMicroExperience(id, formData)
+OpStaff -> MicroUI : 1. userUpdateMicroExperience(id, formData)
 activate MicroUI
 activate OpStaff
 MicroUI -> MicroController : 2. PUT /micro-experiences/{id}(updateRequest)

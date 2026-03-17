@@ -38,10 +38,13 @@ public partial class UserProfile
     [Column("permissions", TypeName = "jsonb")]
     public string? Permissions { get; set; }
 
+    [Column("travel_style", TypeName = "character varying(50)[]")]
+    public List<string>? TravelStyle { get; set; }
+
+    [Column("travel_style_text", TypeName = "text")]
+    public string? TravelStyleText { get; set; }
+
     [ForeignKey("UserId")]
     [InverseProperty("UserProfile")]
     public virtual User User { get; set; } = null!;
-
-    [InverseProperty("UserProfile")]
-    public virtual ICollection<UserVibe> UserVibes { get; set; } = new List<UserVibe>();
 }

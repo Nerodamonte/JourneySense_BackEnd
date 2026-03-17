@@ -6,15 +6,15 @@ skinparam linetype ortho
 
 
 actor Traveler
-participant "JourneyDetailPage\n<<UI>>" as JourneyUI
-participant "JourneyController\n<<controller>>" as JourneyController
-participant "JourneyShareService\n<<service>>" as ShareService
-participant "JourneyRepository\n<<repository>>" as JourneyRepo
-participant "RewardService\n<<service>>" as RewardService
+participant "<<UI>>\n:JourneyDetailPage" as JourneyUI
+participant "<<controller>>\n:JourneyController" as JourneyController
+participant "<<service>>\n:JourneyShareService" as ShareService
+participant "<<repository>>\n:JourneyRepository" as JourneyRepo
+participant "<<service>>\n:RewardService" as RewardService
 database "JSEADatabase" as DB
 
 == Share journey ==
-Traveler -> JourneyUI : 1. shareJourney(journeyId, shareChannel)
+Traveler -> JourneyUI : 1. userShareJourney(journeyId, shareChannel)
 activate JourneyUI
 activate Traveler
 JourneyUI -> JourneyController : 2. POST /journeys/{id}/share(shareRequest)

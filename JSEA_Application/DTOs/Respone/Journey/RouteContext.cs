@@ -39,4 +39,11 @@ public class RouteContext
 
     /// <summary>Số lượng experiences hiện tại phù hợp dọc theo tuyến này (theo filter cứng + trạng thái).</summary>
     public int ExperienceCount { get; set; }
+
+    /// <summary>
+    /// Id của RouteSegment đã được lưu trong DB tương ứng với tuyến này.
+    /// Frontend dùng để gọi POST /journeys/{journeyId}/segments/{segmentId}/suggest.
+    /// Null nếu journey chưa được tạo (chỉ preview).
+    /// </summary>
+    public Guid? SegmentId { get; set; }
 }

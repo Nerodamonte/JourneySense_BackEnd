@@ -4,6 +4,8 @@ using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
 using JSEA_Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using NetTopologySuite.Geometries;
+using System.Text.Json;
 
 namespace JSEA_Infrastructure.Repositories;
 
@@ -35,18 +37,12 @@ public class MicroExperienceRepository : IMicroExperienceRepository
         if (!string.IsNullOrWhiteSpace(filter.Status))
             query = query.Where(x => x.Status == filter.Status);
 
-        if (!string.IsNullOrWhiteSpace(filter.Mood))
-        {
-            query = query.Where(x => x.ExperienceTags.Any(et => et.Factor.Name == filter.Mood && et.Factor.Type == "mood"));
-        }
-
         if (!string.IsNullOrWhiteSpace(filter.TimeOfDay))
         {
             query = query.Where(x => x.PreferredTimes != null && x.PreferredTimes.Contains(filter.TimeOfDay));
         }
 
         return await query
-            .Include(x => x.ExperienceTags).ThenInclude(et => et.Factor)
             .OrderBy(x => x.Name)
             .ToListAsync(cancellationToken);
     }
@@ -57,7 +53,6 @@ public class MicroExperienceRepository : IMicroExperienceRepository
             .Include(x => x.Category)
             .Include(x => x.ExperienceDetail)
             .Include(x => x.ExperienceMetric)
-            .Include(x => x.ExperienceTags).ThenInclude(et => et.Factor)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
@@ -96,70 +91,6 @@ public class MicroExperienceRepository : IMicroExperienceRepository
         }
     }
 
-    public async Task<List<RouteMicroExperienceSuggestionResponse>> FindSuggestionsAlongRouteAsync(Guid journeyId, int limit, string? weatherStr, string? timeOfDayStr, CancellationToken cancellationToken = default)
-    {
-        var journey = await _context.Journeys
-            .AsNoTracking()
-            .FirstOrDefaultAsync(j => j.Id == journeyId, cancellationToken);
-
-        if (journey == null || journey.RoutePath == null)
-            return new List<RouteMicroExperienceSuggestionResponse>();
-
-        var maxDetour = journey.MaxDetourDistanceMeters > 0 ? journey.MaxDetourDistanceMeters : 2000;
-        var maxCount = limit is > 0 and <= 100 ? limit : 20;
-
-        var query = _context.Experiences
-            .AsNoTracking()
-            .Include(e => e.Category)
-            .Include(e => e.ExperienceDetail)
-            .Include(e => e.ExperienceTags)
-            .Where(e => e.Location != null && e.Status == "active")
-            .Where(e => e.Location!.Distance(journey.RoutePath) <= maxDetour);
-
-        if (journey.CurrentMoodFactorId.HasValue)
-        {
-            var moodId = journey.CurrentMoodFactorId.Value;
-            query = query.Where(e => e.ExperienceTags.Any(et => et.FactorId == moodId));
-        }
-
-        if (!string.IsNullOrWhiteSpace(weatherStr))
-        {
-            query = query.Where(e =>
-                e.WeatherSuitability != null &&
-                e.WeatherSuitability.Contains(weatherStr));
-        }
-
-        if (!string.IsNullOrWhiteSpace(timeOfDayStr))
-        {
-            query = query.Where(e =>
-                e.PreferredTimes != null &&
-                e.PreferredTimes.Contains(timeOfDayStr));
-        }
-
-        var experiences = await query
-            .OrderBy(e => e.Location!.Distance(journey.RoutePath))
-            .Take(maxCount)
-            .ToListAsync(cancellationToken);
-
-        return experiences.Select(e => new RouteMicroExperienceSuggestionResponse
-        {
-            Id = e.Id,
-            Name = e.Name,
-            CategoryName = e.Category?.Name,
-            Address = e.Address,
-            City = e.City,
-            Country = e.Country,
-            PreferredTimes = e.PreferredTimes,
-            Status = e.Status,
-            Latitude = e.Location.Y,
-            Longitude = e.Location.X,
-            DetourDistanceMeters = (int)Math.Round(e.Location.Distance(journey.RoutePath)),
-            EstimatedStopMinutes = e.ExperienceDetail?.EstimatedDurationMinutes
-                ?? journey.PreferredStopDurationMinutes
-                ?? 15
-        }).ToList();
-    }
-
     public async Task<int> CountAlongRouteAsync(NetTopologySuite.Geometries.LineString? routePath, int maxDetourDistanceMeters, CancellationToken cancellationToken = default)
     {
         if (routePath == null)
@@ -176,5 +107,104 @@ public class MicroExperienceRepository : IMicroExperienceRepository
             .Where(e => e.Location != null && e.Status == "active")
             .Where(e => e.Location!.Distance(routePath) <= distance)
             .CountAsync(cancellationToken);
+    }
+    public async Task<List<Experience>> FindCandidatesAsync(
+       string vehicleType,
+       string preferredCrowdLevel,
+       LineString segmentPath,
+       int maxDetourDistanceMeters,
+       List<Guid> excludeIds,
+       CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow.AddHours(7); // UTC+7
+        var dayKey = now.DayOfWeek.ToString()[..3].ToLower(); // mon/tue/wed...
+
+        var candidates = await _context.Experiences
+            .AsNoTracking()
+            .Include(e => e.Category)
+            .Include(e => e.ExperienceDetail)
+            .Include(e => e.ExperienceMetric)
+            .Include(e => e.ExperiencePhotos)
+            .Where(e => e.Status == "active")
+            .Where(e => !excludeIds.Contains(e.Id))
+            // Condition 1: vehicle_type
+            .Where(e => e.AccessibleBy.Contains(vehicleType.ToLower()))
+            // Condition 2: crowd_level (skip nếu preferredCrowdLevel = "all")
+            .Where(e => preferredCrowdLevel == "all"
+                || e.ExperienceDetail == null
+                || e.ExperienceDetail.CrowdLevel == preferredCrowdLevel)
+            // Condition 3: detour distance
+            .Where(e => e.Location != null
+                && e.Location.Distance(segmentPath) <= maxDetourDistanceMeters)
+            .ToListAsync(cancellationToken);
+
+        // Condition 7: opening_hours — filter in-memory vì jsonb khó query trong EF
+        candidates = candidates.Where(e => IsOpenNow(e.ExperienceDetail?.OpeningHours, dayKey, now)).ToList();
+
+        return candidates;
+    }
+
+    public async Task<Dictionary<Guid, decimal>> GetActiveEventBoostsAsync(
+     List<Guid> experienceIds,
+     CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+
+        var boosts = await _context.EventOccurrences
+            .AsNoTracking()
+            .Include(o => o.Event)
+            .Where(o => o.Event != null
+                && experienceIds.Contains(o.Event.ExperienceId)
+                && o.OccurrenceStart <= now
+                && o.OccurrenceEnd >= now)
+            .GroupBy(o => o.Event!.ExperienceId)
+            .Select(g => new
+            {
+                ExperienceId = g.Key,
+                Boost = g.Max(o => o.Event!.ScoreBoostFactor ?? 1.0m)
+            })
+            .ToListAsync(cancellationToken);
+
+        return boosts.ToDictionary(b => b.ExperienceId, b => b.Boost);
+    }
+    // =========================================================
+    // PRIVATE: Helpers
+    // =========================================================
+
+    private static bool IsOpenNow(string? openingHoursJson, string dayKey, DateTime now)
+    {
+        if (string.IsNullOrEmpty(openingHoursJson)) return true; // NULL = không filter
+        try
+        {
+            using var doc = JsonDocument.Parse(openingHoursJson);
+            if (!doc.RootElement.TryGetProperty(dayKey, out var hoursEl)) return true;
+
+            var hours = hoursEl.GetString();
+            if (string.IsNullOrEmpty(hours)) return true;
+
+            var parts = hours.Split('-');
+            if (parts.Length != 2) return true;
+
+            var open = TimeOnly.Parse(parts[0].Trim());
+            var close = TimeOnly.Parse(parts[1].Trim());
+            var current = TimeOnly.FromDateTime(now);
+
+            return current >= open && current <= close;
+        }
+        catch
+        {
+            return true; // parse lỗi thì không filter
+        }
+    }
+
+    public async Task<List<Experience>> GetActiveWithoutEmbeddingAsync(CancellationToken cancellationToken = default)
+    {
+        return await _context.Experiences
+            .AsNoTracking()
+            .Include(e => e.Category)
+            .Include(e => e.ExperienceDetail)
+            .Where(e => e.Status == "active")
+            .Where(e => !_context.ExperienceEmbeddings.Any(ee => ee.ExperienceId == e.Id))
+            .ToListAsync(cancellationToken);
     }
 }

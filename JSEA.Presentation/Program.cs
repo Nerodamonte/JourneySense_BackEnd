@@ -13,8 +13,11 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 using Npgsql;
+using Pgvector;
 using System.Text;
 using System.Text.Json.Serialization;
+using JSEA_Application.Services.Journey;
+using JSEA_Application.Services.Profile;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +30,9 @@ var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
 // Geography/Geometry (Point, etc.) cho MicroExperience.Location, Journey, ...
 dataSourceBuilder.UseNetTopologySuite();
 
+// pgvector extension cho kiểu vector(768)
+dataSourceBuilder.UseVector();
+
 // PostgreSQL enum ↔ C# enum
 dataSourceBuilder.MapEnum<UserRole>("user_role");
 dataSourceBuilder.MapEnum<UserStatus>("user_status");
@@ -37,13 +43,14 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(dataSource, o =>
     {
         o.UseNetTopologySuite();
+        o.UseVector();
     })
 );
 
 #endregion
 
 #region Dependency Injection
-
+//Auth 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -51,6 +58,9 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IEmailOtpService, EmailOtpService>();
 builder.Services.AddScoped<IEmailOtpRepository, EmailOtpRepository>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+//Profile
+builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 
 // Micro-Experience
 builder.Services.AddScoped<IMicroExperienceService, JSEA_Application.Services.MicroExperience.MicroExperienceService>();
@@ -66,6 +76,13 @@ builder.Services.AddScoped<IWeatherService, JSEA_Infrastructure.Services.OpenMet
 builder.Services.AddScoped<IJourneyService, JSEA_Application.Services.Journey.JourneyService>();
 builder.Services.AddScoped<IJourneyRepository, JourneyRepository>();
 
+//Embedding
+builder.Services.AddScoped<IExperienceEmbeddingRepository, ExperienceEmbeddingRepository>();
+builder.Services.AddScoped<EmbeddingGeneratorService>();
+
+//Suggest pipeline
+builder.Services.AddScoped<ISuggestService, SuggestService>();
+
 // Rate & Feedback
 builder.Services.AddScoped<IVisitRepository, VisitRepository>();
 builder.Services.AddScoped<IRatingRepository, RatingRepository>();
@@ -73,7 +90,6 @@ builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
 builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
 builder.Services.AddScoped<IRewardService, JSEA_Application.Services.Experience.RewardService>();
 builder.Services.AddScoped<IRateFeedbackService, JSEA_Application.Services.Experience.RateFeedbackService>();
-builder.Services.AddScoped<IFactorRepository, FactorRepository>();
 
 // PayOS
 builder.Services.Configure<PayOSOptions>(builder.Configuration.GetSection("PayOS"));

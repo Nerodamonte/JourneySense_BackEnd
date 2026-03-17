@@ -12,10 +12,12 @@ namespace JSEA_Presentation.Controllers;
 public class JourneyController : ControllerBase
 {
     private readonly IJourneyService _journeyService;
+    private readonly ISuggestService _suggestService;
 
-    public JourneyController(IJourneyService journeyService)
+    public JourneyController(IJourneyService journeyService, ISuggestService suggestService)
     {
         _journeyService = journeyService;
+        _suggestService = suggestService;
     }
 
     /// <summary>
@@ -48,22 +50,6 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
-    /// Lấy các gợi ý micro-experiences dọc/gần tuyến theo journey.
-    /// </summary>
-    [HttpGet("{id:guid}/suggestions")]
-    [ProducesResponseType(typeof(List<RouteMicroExperienceSuggestionResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetSuggestionsAlongRoute(
-        Guid id,
-        [FromQuery] int? limit,
-        [FromQuery] JSEA_Application.Enums.WeatherType? weather,
-        [FromQuery] JSEA_Application.Enums.TimeOfDay? timeOfDay,
-        CancellationToken cancellationToken)
-    {
-        var list = await _journeyService.GetSuggestionsAlongRouteAsync(id, limit, weather, timeOfDay, cancellationToken);
-        return Ok(list);
-    }
-
-    /// <summary>
     /// Thiết lập hành trình: điểm đi, điểm đến, loại xe, thời gian, độ lệch, travel vibe, thời gian dừng ưu tiên. (Authorized)
     /// </summary>
     [HttpPost("setup")]
@@ -87,5 +73,107 @@ public class JourneyController : ControllerBase
             return StatusCode(502, new { message = "Không thể phân tích tuyến. Kiểm tra địa chỉ hoặc API Goong Maps." });
 
         return Created($"/api/journeys/{result.JourneyId}", result);
+    }
+
+    /// <summary>
+    /// Pipeline gợi ý v11. Gọi khi GPS user vào gần segment.
+    /// Hard filter → Gemini embed → cosine search → score → INSERT suggestions.
+    /// </summary>
+    [HttpPost("{journeyId:guid}/segments/{segmentId:guid}/suggest")]
+    [Authorize]
+    [ProducesResponseType(typeof(List<SuggestionResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSuggestions(
+        Guid journeyId,
+        Guid segmentId,
+        CancellationToken cancellationToken)
+    {
+        var results = await _suggestService.GetSuggestionsAsync(journeyId, segmentId, cancellationToken);
+        return Ok(results);
+    }
+
+    /// <summary>
+    /// Tạo AI insight cho một suggestion (RAG). Gọi khi user tap vào suggestion.
+    /// Nếu insight đã có thì trả về luôn, không gọi Gemini lại.
+    /// </summary>
+    [HttpPost("suggestions/{suggestionId:guid}/insight")]
+    [Authorize]
+    [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAiInsight(
+        Guid suggestionId,
+        CancellationToken cancellationToken)
+    {
+        var insight = await _suggestService.GetAiInsightAsync(suggestionId, cancellationToken);
+        if (insight == null)
+            return NotFound(new { message = "Không tìm thấy gợi ý hoặc không thể tạo insight." });
+        return Ok(new { insight });
+    }
+
+    /// <summary>
+    /// User chọn các điểm muốn ghé (waypoints) sau khi xem suggestions.
+    /// Replace toàn bộ waypoint hiện tại của journey.
+    /// </summary>
+    [HttpPut("{journeyId:guid}/waypoints")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SaveWaypoints(
+        Guid journeyId,
+        [FromBody] SaveWaypointsRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var ok = await _journeyService.SaveSelectedWaypointsAsync(
+            journeyId,
+            travelerId,
+            request.SegmentId,
+            request.Waypoints,
+            cancellationToken);
+
+        if (!ok)
+            return BadRequest(new { message = "Không thể lưu waypoints (kiểm tra route/đề xuất/time budget)." });
+
+        return Ok(new { message = "Đã lưu waypoints." });
+    }
+
+    /// <summary>
+    /// Log interaction của user với suggestion (ViewedDetails/Saved/Accepted/Skipped...).
+    /// </summary>
+    [HttpPost("suggestions/{suggestionId:guid}/interactions")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> LogSuggestionInteraction(
+        Guid suggestionId,
+        [FromBody] LogSuggestionInteractionRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var ok = await _journeyService.LogSuggestionInteractionAsync(
+            suggestionId,
+            travelerId,
+            request.InteractionType,
+            cancellationToken);
+
+        if (!ok)
+            return BadRequest(new { message = "Không thể ghi nhận interaction." });
+
+        return Ok(new { message = "Đã ghi nhận interaction." });
     }
 }

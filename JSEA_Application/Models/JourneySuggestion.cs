@@ -28,8 +28,8 @@ public partial class JourneySuggestion
     [Column("detour_time_minutes")]
     public int? DetourTimeMinutes { get; set; }
 
-    [Column("estimated_stop_minutes")]
-    public int? EstimatedStopMinutes { get; set; }
+    [Column("ai_insight", TypeName = "text")]
+    public string? AiInsight { get; set; }
 
     [Column("cosine_score", TypeName = "numeric(5,4)")]
     public decimal? CosineScore { get; set; }

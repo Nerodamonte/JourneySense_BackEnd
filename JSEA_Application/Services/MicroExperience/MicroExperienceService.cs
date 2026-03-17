@@ -76,20 +76,11 @@ public class MicroExperienceService : IMicroExperienceService
             PreferredTimes = request.PreferredTimes,
             WeatherSuitability = request.WeatherSuitability,
             Seasonality = request.Seasonality,
+            AmenityTags = request.AmenityTags,
             Status = "active"
         };
 
         var saved = await _repository.SaveAsync(entity, cancellationToken);
-
-        if (request.FactorIds != null && request.FactorIds.Count > 0)
-        {
-            foreach (var factorId in request.FactorIds)
-            {
-                saved.ExperienceTags.Add(new JSEA_Application.Models.ExperienceTag { ExperienceId = saved.Id, FactorId = factorId });
-            }
-            await _repository.SaveAsync(saved, cancellationToken);
-        }
-
         saved = await _repository.GetByIdAsync(saved.Id, cancellationToken)!;
         return MapToDetailResponse(saved!);
     }
@@ -117,21 +108,14 @@ public class MicroExperienceService : IMicroExperienceService
         entity.Seasonality = request.Seasonality ?? entity.Seasonality;
         if (request.AccessibleBy != null)
             entity.AccessibleBy = request.AccessibleBy;
+        if (request.AmenityTags != null)
+            entity.AmenityTags = request.AmenityTags;
 
         var fullAddress = BuildFullAddress(request.Address, entity.City, entity.Country ?? "Vietnam");
         var location = await _goongMapsService.GeocodeAddressToPointAsync(fullAddress, cancellationToken);
         if (location == null)
             return null;
         entity.Location = location;
-
-        if (request.FactorIds != null)
-        {
-            entity.ExperienceTags.Clear();
-            foreach (var factorId in request.FactorIds)
-            {
-                entity.ExperienceTags.Add(new JSEA_Application.Models.ExperienceTag { ExperienceId = entity.Id, FactorId = factorId });
-            }
-        }
 
         var updated = await _repository.SaveAsync(entity, cancellationToken);
         updated = await _repository.GetByIdAsync(updated.Id, cancellationToken)!;
@@ -155,8 +139,9 @@ public class MicroExperienceService : IMicroExperienceService
             Id = entity.Id,
             Name = entity.Name,
             CategoryName = entity.Category?.Name,
-            Description = entity.ExperienceDetail?.Description,
+            RichDescription = entity.ExperienceDetail?.RichDescription,
             AvgRating = entity.ExperienceMetric?.AvgRating ?? 0,
+            QualityScore = entity.ExperienceMetric?.QualityScore ?? 0,
             Status = entity.Status,
             Address = entity.Address,
             City = entity.City,
@@ -165,7 +150,7 @@ public class MicroExperienceService : IMicroExperienceService
             PreferredTimes = entity.PreferredTimes,
             WeatherSuitability = entity.WeatherSuitability,
             Seasonality = entity.Seasonality,
-            FactorNames = entity.ExperienceTags?.Select(et => et.Factor.Name).ToList(),
+            AmenityTags = entity.AmenityTags,
             Latitude = entity.Location?.Y,
             Longitude = entity.Location?.X
         };

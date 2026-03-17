@@ -34,9 +34,6 @@ public class JourneySetupResponse
     /// <summary>Mood/vibe được chọn (nếu có).</summary>
     public MoodType? CurrentMood { get; set; }
 
-    /// <summary>Thời gian dừng ưu tiên mỗi điểm (phút).</summary>
-    public int? PreferredStopDurationMinutes { get; set; }
-
     /// <summary>Số điểm dừng tối đa mong muốn.</summary>
     public int? MaxStopCount { get; set; }
 

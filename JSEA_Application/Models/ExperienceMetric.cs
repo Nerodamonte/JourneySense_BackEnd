@@ -13,9 +13,8 @@ public partial class ExperienceMetric
     [Column("experience_id")]
     public Guid ExperienceId { get; set; }
 
-    [Column("featured_score")]
-    [Precision(3, 2)]
-    public decimal? FeaturedScore { get; set; }
+    [Column("quality_score", TypeName = "numeric(4,3)")]
+    public decimal QualityScore { get; set; }
 
     [Column("total_visits")]
     public int? TotalVisits { get; set; }

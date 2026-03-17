@@ -14,11 +14,14 @@ public class MicroExperienceDetailResponse
     /// <summary>Tên Category (nếu có).</summary>
     public string? CategoryName { get; set; }
 
-    /// <summary>Mô tả chi tiết Experience.</summary>
-    public string? Description { get; set; }
+    /// <summary>Mô tả chi tiết (rich text) Experience.</summary>
+    public string? RichDescription { get; set; }
 
     /// <summary>Điểm rating trung bình (1–5).</summary>
     public decimal AvgRating { get; set; }
+
+    /// <summary>Điểm chất lượng (0–1, numeric 4,3).</summary>
+    public decimal QualityScore { get; set; }
 
     /// <summary>Trạng thái Experience.</summary>
     public string? Status { get; set; }
@@ -44,8 +47,8 @@ public class MicroExperienceDetailResponse
     /// <summary>Mùa phù hợp.</summary>
     public List<string>? Seasonality { get; set; }
 
-    /// <summary>Tên các factor (vibe/mood) được tag (từ bảng factors).</summary>
-    public List<string>? FactorNames { get; set; }
+    /// <summary>Tag tiện ích (amenity) cho experience.</summary>
+    public List<string>? AmenityTags { get; set; }
 
     /// <summary>Vĩ độ (WGS84).</summary>
     public double? Latitude { get; set; }
