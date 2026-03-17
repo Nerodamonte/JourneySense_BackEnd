@@ -13,7 +13,6 @@ participant "<<repository>>\n:JourneyRepository" as JourneyRepo
 participant "<<service>>\n:RewardService" as RewardService
 database "JSEADatabase" as DB
 
-== Share journey ==
 Traveler -> JourneyUI : 1. userShareJourney(journeyId, shareChannel)
 activate JourneyUI
 activate Traveler
