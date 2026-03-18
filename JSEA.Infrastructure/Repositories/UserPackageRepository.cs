@@ -25,5 +25,26 @@ public class UserPackageRepository : IUserPackageRepository
             .ThenByDescending(x => x.Id)
             .FirstOrDefaultAsync(cancellationToken);
     }
+
+    public async Task<UserPackage> CreateAsync(UserPackage userPackage, CancellationToken cancellationToken = default)
+    {
+        _context.UserPackages.Add(userPackage);
+        await _context.SaveChangesAsync(cancellationToken);
+        return userPackage;
+    }
+
+    public async Task DeactivateCurrentAsync(Guid userId, DateTime nowUtc, CancellationToken cancellationToken = default)
+    {
+        var activePackages = await _context.UserPackages
+            .Where(x => x.UserId == userId)
+            .Where(x => x.IsActive == true)
+            .Where(x => !x.ExpiresAt.HasValue || x.ExpiresAt.Value >= nowUtc)
+            .ToListAsync(cancellationToken);
+
+        foreach (var up in activePackages)
+            up.IsActive = false;
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
 }
 
