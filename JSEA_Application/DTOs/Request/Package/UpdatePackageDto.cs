@@ -21,6 +21,9 @@ public class UpdatePackageDto
     [Range(0, int.MaxValue)]
     public int DistanceLimitKm { get; set; }
 
+    [Range(1, int.MaxValue)]
+    public int DurationInDays { get; set; }
+
     public string? Benefit { get; set; }
 
     public bool? IsPopular { get; set; }
