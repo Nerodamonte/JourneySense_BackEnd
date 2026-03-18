@@ -37,6 +37,7 @@ public class PackageService : IPackageService
             SalePrice = dto.SalePrice,
             Type = dto.Type.Trim().ToLowerInvariant(),
             DistanceLimitKm = dto.DistanceLimitKm,
+            DurationInDays = dto.DurationInDays,
             Benefit = dto.Benefit,
             IsPopular = dto.IsPopular,
             IsActive = dto.IsActive,
@@ -60,6 +61,7 @@ public class PackageService : IPackageService
         entity.SalePrice = dto.SalePrice;
         entity.Type = dto.Type.Trim().ToLowerInvariant();
         entity.DistanceLimitKm = dto.DistanceLimitKm;
+        entity.DurationInDays = dto.DurationInDays;
         entity.Benefit = dto.Benefit;
         entity.IsPopular = dto.IsPopular;
         entity.IsActive = dto.IsActive;
@@ -99,6 +101,7 @@ public class PackageService : IPackageService
             SalePrice = p.SalePrice,
             Type = p.Type,
             DistanceLimitKm = p.DistanceLimitKm,
+            DurationInDays = p.DurationInDays,
             Benefit = p.Benefit,
             IsPopular = p.IsPopular,
             IsActive = p.IsActive ?? false,

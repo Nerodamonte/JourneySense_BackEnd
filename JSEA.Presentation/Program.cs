@@ -104,6 +104,8 @@ builder.Services.AddScoped<IRateFeedbackService, JSEA_Application.Services.Exper
 // PayOS
 builder.Services.Configure<PayOSOptions>(builder.Configuration.GetSection("PayOS"));
 builder.Services.AddScoped<IPayOSPaymentService, PayOSPaymentService>();
+builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+builder.Services.AddScoped<IPurchaseService, JSEA_Application.Services.Payment.PurchaseService>();
 #endregion
 
 #region Controllers + JSON Enum as string

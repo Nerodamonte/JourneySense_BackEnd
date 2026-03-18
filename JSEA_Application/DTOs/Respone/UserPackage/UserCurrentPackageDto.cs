@@ -18,5 +18,6 @@ public class UserCurrentPackageDto
 
     public int DistanceLimitKm { get; set; }
     public decimal UsedKm { get; set; }
+    public int DurationInDays { get; set; }
 }
 

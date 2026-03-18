@@ -18,7 +18,7 @@ public class PayOSPaymentService : IPayOSPaymentService
 
     public async Task<CreatePaymentResponse> CreatePaymentLinkAsync(CreatePaymentRequest request, CancellationToken cancellationToken = default)
     {
-        var orderCode = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var orderCode = request.OrderCode ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var returnUrl = request.ReturnUrl ?? "https://localhost:5001/payment/success";
         var cancelUrl = request.CancelUrl ?? "https://localhost:5001/payment/cancel";
 

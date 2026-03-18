@@ -36,7 +36,8 @@ public class UserPackageService : IUserPackageService
             EndDate = up.ExpiresAt,
             Status = status,
             DistanceLimitKm = up.DistanceLimitKm,
-            UsedKm = up.UsedKm
+            UsedKm = up.UsedKm,
+            DurationInDays = up.Package.DurationInDays
         };
     }
 }

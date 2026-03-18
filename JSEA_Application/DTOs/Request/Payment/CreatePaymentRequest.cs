@@ -4,6 +4,8 @@ namespace JSEA_Application.DTOs.Request.Payment;
 
 public class CreatePaymentRequest
 {
+    public long? OrderCode { get; set; }
+
     [Required]
     [Range(1, long.MaxValue, ErrorMessage = "Số tiền phải lớn hơn 0")]
     public long TotalAmount { get; set; }

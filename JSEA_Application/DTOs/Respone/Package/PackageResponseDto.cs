@@ -8,6 +8,7 @@ public class PackageResponseDto
     public decimal? SalePrice { get; set; }
     public string Type { get; set; } = null!;
     public int DistanceLimitKm { get; set; }
+    public int DurationInDays { get; set; }
     public string? Benefit { get; set; }
     public bool? IsPopular { get; set; }
     public bool IsActive { get; set; }
