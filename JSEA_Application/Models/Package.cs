@@ -31,6 +31,9 @@ public partial class Package
     [Column("distance_limit_km")]
     public int DistanceLimitKm { get; set; }
 
+    [Column("duration_in_days")]
+    public int DurationInDays { get; set; }
+
     [Column("benefit", TypeName = "jsonb")]
     public string? Benefit { get; set; }
 

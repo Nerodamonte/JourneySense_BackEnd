@@ -19,6 +19,9 @@ using System.Text.Json.Serialization;
 using JSEA_Application.Services.Journey;
 using JSEA_Application.Services.Profile;
 using JSEA_Presentation.JsonConverters;
+using JSEA_Application.Services.Category;
+using JSEA_Application.Services.Package;
+using JSEA_Application.Services.UserPackage;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -67,6 +70,11 @@ builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 builder.Services.AddScoped<IMicroExperienceService, JSEA_Application.Services.MicroExperience.MicroExperienceService>();
 builder.Services.AddScoped<IMicroExperienceRepository, MicroExperienceRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<IPackageRepository, PackageRepository>();
+builder.Services.AddScoped<IPackageService, PackageService>();
+builder.Services.AddScoped<IUserPackageRepository, UserPackageRepository>();
+builder.Services.AddScoped<IUserPackageService, UserPackageService>();
 
 // Journey Setup (Goong Maps)
 builder.Services.AddHttpClient();
