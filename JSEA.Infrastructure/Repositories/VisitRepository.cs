@@ -38,4 +38,18 @@ public class VisitRepository : IVisitRepository
         await _context.SaveChangesAsync(cancellationToken);
         return visit;
     }
+
+    public async Task<Visit?> GetByJourneyTravelerExperienceAsync(
+        Guid journeyId,
+        Guid travelerId,
+        Guid experienceId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Visits
+            .FirstOrDefaultAsync(v =>
+                v.JourneyId == journeyId &&
+                v.TravelerId == travelerId &&
+                v.ExperienceId == experienceId,
+                cancellationToken);
+    }
 }

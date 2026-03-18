@@ -1,5 +1,7 @@
 using JSEA_Application.DTOs.Request.Journey;
+using JSEA_Application.DTOs.Request.JourneyProgress;
 using JSEA_Application.DTOs.Respone.Journey;
+using JSEA_Application.DTOs.Respone.JourneyProgress;
 using JSEA_Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,11 +15,16 @@ public class JourneyController : ControllerBase
 {
     private readonly IJourneyService _journeyService;
     private readonly ISuggestService _suggestService;
+    private readonly IJourneyProgressService _journeyProgressService;
 
-    public JourneyController(IJourneyService journeyService, ISuggestService suggestService)
+    public JourneyController(
+        IJourneyService journeyService,
+        ISuggestService suggestService,
+        IJourneyProgressService journeyProgressService)
     {
         _journeyService = journeyService;
         _suggestService = suggestService;
+        _journeyProgressService = journeyProgressService;
     }
 
     /// <summary>
@@ -116,7 +123,7 @@ public class JourneyController : ControllerBase
     /// </summary>
     [HttpPut("{journeyId:guid}/waypoints")]
     [Authorize]
-    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(SaveWaypointsResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -142,7 +149,132 @@ public class JourneyController : ControllerBase
         if (!ok)
             return BadRequest(new { message = "Không thể lưu waypoints (kiểm tra route/đề xuất/time budget)." });
 
-        return Ok(new { message = "Đã lưu waypoints." });
+        // Additive response: keep message, also return waypointId list for FE check-in/extend/checkout.
+        var detail = await _journeyService.GetByIdAsync(journeyId, cancellationToken);
+
+        return Ok(new SaveWaypointsResponse
+        {
+            Message = "Đã lưu waypoints.",
+            Waypoints = detail?.Waypoints
+                ?.OrderBy(w => w.StopOrder)
+                .Select(w => new SavedWaypointItemResponse
+                {
+                    WaypointId = w.WaypointId,
+                    ExperienceId = w.ExperienceId,
+                    SuggestionId = w.SuggestionId,
+                    StopOrder = w.StopOrder,
+                    PlannedStopMinutes = w.PlannedStopMinutes
+                })
+                .ToList()
+        });
+    }
+
+    /// <summary>
+    /// Bắt đầu hành trình (FE bấm "Start journey"). Set StartedAt và chuyển status sang InProgress. (Authorized)
+    /// </summary>
+    [HttpPost("{journeyId:guid}/start")]
+    [Authorize]
+    [ProducesResponseType(typeof(StartJourneyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> StartJourney(Guid journeyId, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var result = await _journeyProgressService.StartJourneyAsync(journeyId, travelerId, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không tìm thấy hành trình." });
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Check-in tại waypoint (FE bấm "Ghé thăm"). Tạo Visit; Feedback optional. (Authorized)
+    /// </summary>
+    [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/checkin")]
+    [Authorize]
+    [ProducesResponseType(typeof(WaypointCheckInResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CheckIn(
+        Guid journeyId,
+        Guid waypointId,
+        [FromBody] WaypointCheckInRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var result = await _journeyProgressService.CheckInAsync(journeyId, waypointId, travelerId, request, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không tìm thấy waypoint hoặc hành trình chưa bắt đầu." });
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Extend thời gian dừng tại waypoint (preset 10/20/30). (Authorized)
+    /// </summary>
+    [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/extend")]
+    [Authorize]
+    [ProducesResponseType(typeof(WaypointExtendResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ExtendStop(
+        Guid journeyId,
+        Guid waypointId,
+        [FromBody] WaypointExtendRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var result = await _journeyProgressService.ExtendStopAsync(journeyId, waypointId, travelerId, request, cancellationToken);
+        if (result == null)
+            return BadRequest(new { message = "Không thể extend (delta không hợp lệ hoặc hành trình/waypoint không tồn tại)." });
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Check-out (FE bấm "Rời đi"). Rating bắt buộc. (Authorized)
+    /// </summary>
+    [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/checkout")]
+    [Authorize]
+    [ProducesResponseType(typeof(WaypointCheckOutResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CheckOut(
+        Guid journeyId,
+        Guid waypointId,
+        [FromBody] WaypointCheckOutRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var result = await _journeyProgressService.CheckOutAsync(journeyId, waypointId, travelerId, request, cancellationToken);
+        if (result == null)
+            return BadRequest(new { message = "Không thể check-out (rating/dữ liệu không hợp lệ hoặc hành trình/waypoint không tồn tại)." });
+
+        return Ok(result);
     }
 
     /// <summary>
