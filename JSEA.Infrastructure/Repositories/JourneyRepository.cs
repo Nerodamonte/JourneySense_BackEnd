@@ -55,7 +55,14 @@ public class JourneyRepository : IJourneyRepository
     {
         return await _context.Journeys
             .Include(j => j.JourneyWaypoints.OrderBy(w => w.StopOrder))
-                .Include(j => j.RouteSegments.OrderBy(s => s.SegmentOrder))
+                .ThenInclude(w => w.Experience)
+                    .ThenInclude(e => e.Category)
+            .Include(j => j.JourneyWaypoints.OrderBy(w => w.StopOrder))
+                .ThenInclude(w => w.Experience)
+                    .ThenInclude(e => e.ExperiencePhotos)
+            .Include(j => j.JourneyWaypoints.OrderBy(w => w.StopOrder))
+                .ThenInclude(w => w.Suggestion)
+            .Include(j => j.RouteSegments.OrderBy(s => s.SegmentOrder))
             .FirstOrDefaultAsync(j => j.Id == id, cancellationToken);
     }
 
@@ -143,6 +150,27 @@ public class JourneyRepository : IJourneyRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<JourneySuggestion>> GetSuggestionsByJourneySegmentAsync(
+        Guid journeyId,
+        Guid segmentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.JourneySuggestions
+            .AsNoTracking()
+            .Where(s => s.JourneyId == journeyId && s.SegmentId == segmentId)
+            .Include(s => s.Experience)
+                .ThenInclude(e => e.Category)
+            .Include(s => s.Experience)
+                .ThenInclude(e => e.ExperienceDetail)
+            .Include(s => s.Experience)
+                .ThenInclude(e => e.ExperienceMetric)
+            .Include(s => s.Experience)
+                .ThenInclude(e => e.ExperiencePhotos)
+            .OrderByDescending(s => s.FinalSimilarity ?? 0)
+            .ThenByDescending(s => s.SuggestedAt ?? DateTime.MinValue)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task UpdateSuggestionInsightAsync(Guid suggestionId, string insight, CancellationToken cancellationToken = default)
     {
         var suggestion = await _context.JourneySuggestions
@@ -206,5 +234,24 @@ public class JourneyRepository : IJourneyRepository
         });
 
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<List<Guid>> GetInteractionSuggestionIdsAsync(
+        IEnumerable<Guid> suggestionIds,
+        InteractionType interactionType,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = suggestionIds.Distinct().ToList();
+        if (ids.Count == 0) return new List<Guid>();
+
+        return await _context.SuggestionInteractions
+     .AsNoTracking()
+     .Where(i =>
+         i.SuggestionId.HasValue &&
+         ids.Contains(i.SuggestionId.Value) &&
+         i.InteractionType == interactionType)
+     .Select(i => i.SuggestionId.Value)
+     .Distinct()
+     .ToListAsync(cancellationToken);
     }
 }

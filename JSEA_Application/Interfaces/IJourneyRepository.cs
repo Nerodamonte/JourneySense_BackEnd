@@ -34,6 +34,11 @@ public interface IJourneyRepository
     /// </summary>
     Task<List<JourneySuggestion>> GetSuggestionsByIdsAsync(IEnumerable<Guid> suggestionIds, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Lấy danh sách suggestions đã được tạo cho 1 journey + segment (phục vụ cache/idempotent suggest).
+    /// </summary>
+    Task<List<JourneySuggestion>> GetSuggestionsByJourneySegmentAsync(Guid journeyId, Guid segmentId, CancellationToken cancellationToken = default);
+
     /// <summary>Cập nhật ai_insight của một suggestion sau khi RAG generate xong.</summary>
     Task UpdateSuggestionInsightAsync(Guid suggestionId, string insight, CancellationToken cancellationToken = default);
 
@@ -48,4 +53,9 @@ public interface IJourneyRepository
 
     /// <summary>Ghi nhận một interaction cho suggestion.</summary>
     Task AddSuggestionInteractionAsync(Guid suggestionId, InteractionType interactionType, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lấy các suggestionId đã có interaction (để tránh insert trùng).
+    /// </summary>
+    Task<List<Guid>> GetInteractionSuggestionIdsAsync(IEnumerable<Guid> suggestionIds, InteractionType interactionType, CancellationToken cancellationToken = default);
 }
