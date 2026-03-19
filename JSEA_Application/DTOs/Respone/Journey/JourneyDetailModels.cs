@@ -25,7 +25,6 @@ public class JourneyWaypointResponse
     public Guid? SegmentId { get; set; }
 
     public int StopOrder { get; set; }
-    public int? PlannedStopMinutes { get; set; }
 
     public string? Name { get; set; }
     public string? CategoryName { get; set; }

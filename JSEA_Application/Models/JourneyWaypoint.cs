@@ -24,9 +24,6 @@ public partial class JourneyWaypoint
     [Column("stop_order")]
     public int StopOrder { get; set; }
 
-    [Column("planned_stop_minutes")]
-    public int? PlannedStopMinutes { get; set; }
-
     [Column("actual_stop_minutes")]
     public int? ActualStopMinutes { get; set; }
 

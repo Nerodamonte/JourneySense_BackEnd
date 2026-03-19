@@ -3,6 +3,7 @@ using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
+using NetTopologySuite.Geometries;
 
 namespace JSEA_Application.Services.Journey;
 
@@ -250,7 +251,6 @@ public class JourneyService : IJourneyService
                 SuggestionId = w.SuggestionId,
                 SegmentId = w.Suggestion?.SegmentId,
                 StopOrder = w.StopOrder,
-                PlannedStopMinutes = w.PlannedStopMinutes,
                 Name = w.Experience?.Name,
                 CategoryName = w.Experience?.Category?.Name,
                 Address = w.Experience?.Address,
@@ -323,11 +323,11 @@ public class JourneyService : IJourneyService
         if (suggestions.Any(s => s.JourneyId != journeyId || s.SegmentId != segmentId))
             return false;
 
-        // totalTimeBudget = base route minutes + Σ detour + Σ plannedStopMinutes
+        // Time budget check: base route minutes + Σ detour minutes.
+        // Planned stop duration is no longer provided by client during setup.
         var baseMinutes = segment.EstimatedDurationMinutes ?? 0;
         var totalDetourMinutes = suggestions.Sum(s => s.DetourTimeMinutes ?? 0);
-        var totalStopMinutes = waypoints.Sum(w => w.PlannedStopMinutes ?? 0);
-        var totalTripMinutes = baseMinutes + totalDetourMinutes + totalStopMinutes;
+        var totalTripMinutes = baseMinutes + totalDetourMinutes;
 
         var budgetMinutes = journey.TimeBudgetMinutes ?? 0;
         if (budgetMinutes > 0 && totalTripMinutes > budgetMinutes)
@@ -352,8 +352,7 @@ public class JourneyService : IJourneyService
                     JourneyId = journeyId,
                     ExperienceId = s.ExperienceId,
                     SuggestionId = s.Id,
-                    StopOrder = w.StopOrder,
-                    PlannedStopMinutes = w.PlannedStopMinutes
+                    StopOrder = w.StopOrder
                 };
             })
             .ToList();
@@ -400,5 +399,156 @@ public class JourneyService : IJourneyService
         await _journeyRepository.AddSuggestionInteractionAsync(suggestionId, interactionType, cancellationToken);
         return true;
     }
+
+    public async Task<JourneyPolylineResponse?> GetJourneyPolylineAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetByIdAsync(journeyId, cancellationToken);
+        if (journey == null)
+            throw new KeyNotFoundException("Không tìm thấy hành trình.");
+        if (journey.TravelerId != travelerId)
+            throw new UnauthorizedAccessException("Không có quyền truy cập hành trình.");
+        if (journey.OriginLocation == null || journey.DestinationLocation == null)
+            throw new InvalidOperationException("Hành trình thiếu tọa độ origin/destination.");
+
+        var waypointPoints = journey.JourneyWaypoints?
+            .OrderBy(w => w.StopOrder)
+            .Select(w => w.Experience?.Location)
+            .Where(p => p != null)
+            .Select(p => p!)
+            .ToList() ?? new List<Point>();
+
+        // Nếu chưa có waypoint thì fallback trả về tuyến đã lưu trong DB (route segment đã chọn).
+        if (waypointPoints.Count == 0)
+        {
+            var line = journey.RoutePath ?? journey.ActualRoutePath;
+            var points = line?.Coordinates
+                .Select(c => new GeoPointResponse { Latitude = c.Y, Longitude = c.X })
+                .ToList() ?? new List<GeoPointResponse>();
+
+            return new JourneyPolylineResponse
+            {
+                JourneyId = journey.Id,
+                Polyline = null,
+                Points = points,
+                DistanceMeters = journey.TotalDistanceMeters,
+                EstimatedDurationMinutes = journey.EstimatedDurationMinutes
+            };
+        }
+
+        var vehicle = Enum.TryParse<VehicleType>(journey.VehicleType, true, out var vt)
+            ? vt
+            : VehicleType.Car;
+
+        var route = await _goongMapsService.GetDirectionRouteAsync(
+            journey.OriginLocation,
+            journey.DestinationLocation,
+            vehicle,
+            waypointPoints,
+            cancellationToken);
+
+        if (route == null)
+            return null;
+
+        var routePoints = route.RoutePath?.Coordinates
+            .Select(c => new GeoPointResponse { Latitude = c.Y, Longitude = c.X })
+            .ToList() ?? new List<GeoPointResponse>();
+
+        return new JourneyPolylineResponse
+        {
+            JourneyId = journey.Id,
+            TargetWaypointId = null,
+            TargetExperienceId = null,
+            Polyline = route.Polyline,
+            Points = routePoints,
+            DistanceMeters = route.TotalDistanceMeters,
+            EstimatedDurationMinutes = route.EstimatedDurationMinutes
+        };
+    }
+
+    public async Task<JourneyPolylineResponse?> GetNearestWaypointPolylineAsync(
+        Guid journeyId,
+        Guid travelerId,
+        double currentLatitude,
+        double currentLongitude,
+        bool excludeCompletedWaypoints = true,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetByIdAsync(journeyId, cancellationToken);
+        if (journey == null)
+            throw new KeyNotFoundException("Không tìm thấy hành trình.");
+        if (journey.TravelerId != travelerId)
+            throw new UnauthorizedAccessException("Không có quyền truy cập hành trình.");
+
+        var candidates = journey.JourneyWaypoints
+            ?.Where(w => w.Experience?.Location != null)
+            .Where(w => !excludeCompletedWaypoints || w.ActualDepartureAt == null)
+            .Select(w => new WaypointCandidate(w, w.Experience!.Location!))
+            .ToList() ?? new List<WaypointCandidate>();
+
+        if (candidates.Count == 0)
+            throw new InvalidOperationException("Không có waypoint hợp lệ để tạo polyline.");
+
+        // Chọn waypoint gần nhất theo khoảng cách đường chim bay (Haversine) để tránh gọi N lần Directions.
+        var nearest = candidates
+            .Select(c => new
+            {
+                c.Waypoint,
+                c.Location,
+                DistanceMeters = HaversineDistanceMeters(currentLatitude, currentLongitude, c.Location.Y, c.Location.X)
+            })
+            .OrderBy(x => x.DistanceMeters)
+            .First();
+
+        var vehicle = Enum.TryParse<VehicleType>(journey.VehicleType, true, out var vt)
+            ? vt
+            : VehicleType.Car;
+
+        var origin = new Point(currentLongitude, currentLatitude) { SRID = 4326 };
+        var destination = new Point(nearest.Location.X, nearest.Location.Y) { SRID = 4326 };
+
+        var route = await _goongMapsService.GetDirectionRouteAsync(
+            origin,
+            destination,
+            vehicle,
+            waypoints: null,
+            cancellationToken);
+
+        if (route == null)
+            return null;
+
+        var routePoints = route.RoutePath?.Coordinates
+            .Select(c => new GeoPointResponse { Latitude = c.Y, Longitude = c.X })
+            .ToList() ?? new List<GeoPointResponse>();
+
+        return new JourneyPolylineResponse
+        {
+            JourneyId = journey.Id,
+            TargetWaypointId = nearest.Waypoint.Id,
+            TargetExperienceId = nearest.Waypoint.ExperienceId,
+            Polyline = route.Polyline,
+            Points = routePoints,
+            DistanceMeters = route.TotalDistanceMeters,
+            EstimatedDurationMinutes = route.EstimatedDurationMinutes
+        };
+    }
+
+    private sealed record WaypointCandidate(JourneyWaypoint Waypoint, Point Location);
+
+    private static int HaversineDistanceMeters(double lat1, double lon1, double lat2, double lon2)
+    {
+        const double R = 6371000; // meters
+        var dLat = DegreesToRadians(lat2 - lat1);
+        var dLon = DegreesToRadians(lon2 - lon1);
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(DegreesToRadians(lat1)) * Math.Cos(DegreesToRadians(lat2)) *
+                Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
+        var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
+        return (int)Math.Round(R * c);
+    }
+
+    private static double DegreesToRadians(double degrees) => degrees * (Math.PI / 180.0);
 
 }

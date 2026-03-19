@@ -49,4 +49,15 @@ public interface IGoongMapsService
     /// Lấy chi tiết địa điểm theo place_id (từ Place AutoComplete). Trả về null nếu không tìm thấy.
     /// </summary>
     Task<PlaceDetailResponse?> GetPlaceDetailAsync(string placeId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lấy route polyline (Directions) theo tọa độ, có thể đi qua danh sách waypoint (theo thứ tự).
+    /// Trả về RouteContext với Polyline (encoded) và RoutePath (LineString nội bộ).
+    /// </summary>
+    Task<RouteContext?> GetDirectionRouteAsync(
+        Point origin,
+        Point destination,
+        VehicleType vehicleType,
+        List<Point>? waypoints = null,
+        CancellationToken cancellationToken = default);
 }
