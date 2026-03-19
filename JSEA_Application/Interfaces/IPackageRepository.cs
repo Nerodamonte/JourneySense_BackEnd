@@ -1,4 +1,4 @@
-using JSEA_Application.Models;
+﻿using JSEA_Application.Models;
 
 namespace JSEA_Application.Interfaces;
 
@@ -9,4 +9,3 @@ public interface IPackageRepository
     Task<Package> CreateAsync(Package package, CancellationToken cancellationToken = default);
     Task UpdateAsync(Package package, CancellationToken cancellationToken = default);
 }
-

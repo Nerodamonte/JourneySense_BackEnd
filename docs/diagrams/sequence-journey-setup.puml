@@ -1,0 +1,57 @@
+@startuml Journey Setup - Sequence Diagram
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+actor Traveler
+participant "<<UI>>\n:JourneySetupPage" as JourneyUI
+participant "<<controller>>\n:JourneyController" as JourneyController
+participant "<<service>>\n:JourneyService" as JourneyService
+participant "<<service>>\n:GoongMapsService" as GoongMapsService
+participant "<<repository>>\n:JourneyRepository" as JourneyRepository
+database "JSEADatabase" as DB
+
+== Open journey setup form ==
+Traveler -> JourneyUI : 1. userOpenJourneySetup()
+activate JourneyUI
+activate Traveler
+JourneyUI --> Traveler : 1.1 showJourneyForm()
+deactivate JourneyUI
+
+
+== Submit form & process ==
+Traveler -> JourneyUI : 2. userSubmitJourneyForm(journeyForm)
+activate JourneyUI
+JourneyUI -> JourneyController : 3. POST /journeys/setup(journeyForm)
+activate JourneyController
+JourneyController -> JourneyService : 4. validateAndCreateJourney(journeyForm)
+activate JourneyService
+
+alt invalid data
+    JourneyService --> JourneyController : 4.1 validationError(errors)
+    JourneyController --> JourneyUI : 3.1 showValidationErrors(errors)
+    JourneyUI --> Traveler : 2.1 displayValidationErrors()
+else valid data
+    JourneyService -> GoongMapsService : 5. analyzeRouteContext(origin, destination, vehicleType, timeBudget, detourDistance)
+    activate GoongMapsService
+    GoongMapsService --> JourneyService : 5.1 routeContext
+    deactivate GoongMapsService
+
+    JourneyService -> JourneyRepository : 6. saveAsync(journey, waypoints)
+    activate JourneyRepository
+    JourneyRepository -> DB : 7. INSERT Journey, JourneyWaypoints
+    activate DB
+    DB --> JourneyRepository : 7.1 insertResult
+    deactivate DB
+    JourneyRepository --> JourneyService : 6.1 journey
+    deactivate JourneyRepository
+
+    JourneyService --> JourneyController : 4.2 journeyCreated(journey)
+    deactivate JourneyService
+    JourneyController --> JourneyUI : 3.2 showJourneySummary(journey)
+    deactivate JourneyController
+    JourneyUI --> Traveler : 2.2 displayJourneyConfirmation()
+    deactivate JourneyUI
+    deactivate Traveler
+end
+@enduml

@@ -1,4 +1,4 @@
-using JSEA_Application.Interfaces;
+﻿using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -47,4 +47,3 @@ public class PackageRepository : IPackageRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 }
-
