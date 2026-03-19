@@ -14,6 +14,7 @@ namespace JSEA_Application.Services.Profile
     public class UserProfileService : IUserProfileService
     {
         private readonly IUserProfileRepository _userProfileRepository;
+        private readonly IUserRepository _userRepository;
         private readonly IConfiguration _configuration;
         private readonly IHttpClientFactory _httpClientFactory;
 
@@ -21,10 +22,12 @@ namespace JSEA_Application.Services.Profile
 
         public UserProfileService(
             IUserProfileRepository userProfileRepository,
+            IUserRepository userRepository,
             IConfiguration configuration,
             IHttpClientFactory httpClientFactory)
         {
             _userProfileRepository = userProfileRepository;
+            _userRepository = userRepository;
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
         }
@@ -34,7 +37,18 @@ namespace JSEA_Application.Services.Profile
             UpdateProfileRequest request,
             CancellationToken cancellationToken = default)
         {
-        
+            if (request.Phone != null)
+            {
+                var user = await _userRepository.GetByIdAsync(userId);
+                if (user != null && user.Phone != request.Phone)
+                {
+                    user.Phone = request.Phone;
+                    user.PhoneVerified = false;
+                    user.UpdatedAt = DateTime.UtcNow;
+                    await _userRepository.UpdateAsync(user);
+                }
+            }
+
             var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
             var isNew = profile == null;
 
