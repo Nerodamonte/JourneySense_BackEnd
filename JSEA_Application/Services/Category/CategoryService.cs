@@ -32,7 +32,7 @@ public class CategoryService : ICategoryService
         var entity = new Models.Category
         {
             Name = dto.Name.Trim(),
-            Slug = Slugify(dto.Name),
+            Slug = string.IsNullOrWhiteSpace(dto.Slug) ? Slugify(dto.Name) : dto.Slug.Trim().ToLowerInvariant(),
             Description = dto.Description,
             DisplayOrder = dto.DisplayOrder,
             IsActive = dto.IsActive
@@ -49,7 +49,7 @@ public class CategoryService : ICategoryService
             return null;
 
         entity.Name = dto.Name.Trim();
-        entity.Slug = Slugify(dto.Name);
+        entity.Slug = string.IsNullOrWhiteSpace(dto.Slug) ? Slugify(dto.Name) : dto.Slug.Trim().ToLowerInvariant();
         entity.Description = dto.Description;
         entity.DisplayOrder = dto.DisplayOrder;
         entity.IsActive = dto.IsActive;
