@@ -1,4 +1,4 @@
-using JSEA_Application.Interfaces;
+﻿using JSEA_Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace JSEA_Presentation.Controllers;
@@ -23,4 +23,3 @@ public class UsersController : ControllerBase
         return Ok(current);
     }
 }
-

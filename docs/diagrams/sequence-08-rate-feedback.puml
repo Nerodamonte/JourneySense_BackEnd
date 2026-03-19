@@ -14,6 +14,7 @@ participant "<<repository>>\n:FeedbackRepository" as FeedbackRepo
 participant "<<service>>\n:RewardService" as RewardService
 database "JSEADatabase" as DB
 
+== Mark as visited & rate, feedback ==
 Traveler -> ExpUI : 1. userSubmitVisitWithFeedback(experienceId, journeyId, rating, feedbackText, photoUrls)
 activate ExpUI
 activate Traveler

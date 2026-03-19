@@ -1,4 +1,4 @@
-namespace JSEA_Application.DTOs.Respone.Category;
+﻿namespace JSEA_Application.DTOs.Respone.Category;
 
 public class CategoryResponseDto
 {
@@ -9,4 +9,3 @@ public class CategoryResponseDto
     public int DisplayOrder { get; set; }
     public bool IsActive { get; set; }
 }
-

@@ -1,4 +1,4 @@
-using JSEA_Application.DTOs.Request.Category;
+﻿using JSEA_Application.DTOs.Request.Category;
 using JSEA_Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -62,4 +62,3 @@ public class CategoriesController : ControllerBase
         return Ok(deleted);
     }
 }
-

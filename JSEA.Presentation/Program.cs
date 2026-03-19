@@ -76,13 +76,14 @@ builder.Services.AddScoped<IPackageService, PackageService>();
 builder.Services.AddScoped<IUserPackageRepository, UserPackageRepository>();
 builder.Services.AddScoped<IUserPackageService, UserPackageService>();
 
+
 // Journey Setup (Goong Maps)
 builder.Services.AddHttpClient();
 builder.Services.Configure<JSEA_Infrastructure.Services.Goong.GoongOptions>(
     builder.Configuration.GetSection(JSEA_Infrastructure.Services.Goong.GoongOptions.SectionName));
 builder.Services.AddScoped<IGoongMapsService, JSEA_Infrastructure.Services.Goong.GoongMapsService>();
 builder.Services.AddScoped<IWeatherService, JSEA_Infrastructure.Services.OpenMeteo.OpenMeteoWeatherService>();
-builder.Services.AddScoped<IJourneyService, JSEA_Application.Services.Journey.JourneyService>();
+builder.Services.AddScoped<IJourneyService, JourneyService>();
 builder.Services.AddScoped<IJourneyRepository, JourneyRepository>();
 builder.Services.AddScoped<IJourneyProgressService, JourneyProgressService>();
 

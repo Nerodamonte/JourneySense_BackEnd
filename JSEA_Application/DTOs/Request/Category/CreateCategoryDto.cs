@@ -17,4 +17,3 @@ public class CreateCategoryDto
 
     public bool IsActive { get; set; } = true;
 }
-

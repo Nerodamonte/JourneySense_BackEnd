@@ -1,4 +1,4 @@
-using JSEA_Application.DTOs.Request.Package;
+﻿using JSEA_Application.DTOs.Request.Package;
 using JSEA_Application.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
@@ -76,4 +76,3 @@ public class PackagesController : ControllerBase
         return Ok(deleted);
     }
 }
-

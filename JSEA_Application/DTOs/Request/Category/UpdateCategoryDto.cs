@@ -17,4 +17,3 @@ public class UpdateCategoryDto
 
     public bool IsActive { get; set; }
 }
-

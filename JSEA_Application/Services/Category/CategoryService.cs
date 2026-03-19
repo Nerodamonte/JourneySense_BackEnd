@@ -93,4 +93,3 @@ public class CategoryService : ICategoryService
         return string.IsNullOrEmpty(slug) ? "category" : slug;
     }
 }
-
