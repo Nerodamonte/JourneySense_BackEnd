@@ -37,4 +37,24 @@ public class JourneyDetailResponse
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public DateTime? CreatedAt { get; set; }
+
+    /// <summary>
+    /// Main route geometry (WGS84) for reloading map after app restart.
+    /// </summary>
+    public List<GeoPointResponse>? RoutePoints { get; set; }
+
+    /// <summary>
+    /// All stored route segments (alternatives) created at setup.
+    /// </summary>
+    public List<RouteSegmentResponse>? Segments { get; set; }
+
+    /// <summary>
+    /// Current planned stops (waypoints) in the journey.
+    /// </summary>
+    public List<JourneyWaypointResponse>? Waypoints { get; set; }
+
+    /// <summary>
+    /// Segment inferred from current waypoints (if any).
+    /// </summary>
+    public Guid? SelectedSegmentId { get; set; }
 }

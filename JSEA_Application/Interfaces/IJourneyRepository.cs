@@ -7,6 +7,20 @@ public interface IJourneyRepository
 {
     Task<Journey> SaveAsync(Journey journey, List<JourneyWaypoint> waypoints, List<RouteSegment>? segments = null, CancellationToken cancellationToken = default);
     Task<Journey?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lấy journey theo id (không include graph nặng). Dùng cho các thao tác runtime (start/checkin/checkout).
+    /// </summary>
+    Task<Journey?> GetBasicByIdAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lấy waypoint thuộc journey và thuộc traveler (journey.TravelerId).
+    /// Include Journey để check trạng thái/ownership.
+    /// </summary>
+    Task<JourneyWaypoint?> GetWaypointForTravelerAsync(Guid journeyId, Guid waypointId, Guid travelerId, CancellationToken cancellationToken = default);
+
+    Task<Journey> UpdateAsync(Journey journey, CancellationToken cancellationToken = default);
+    Task<JourneyWaypoint> UpdateWaypointAsync(JourneyWaypoint waypoint, CancellationToken cancellationToken = default);
     Task<List<Journey>> GetByTravelerIdAsync(Guid travelerId, CancellationToken cancellationToken = default);
     /// <summary>Lấy danh sách experience_id đã được gợi ý trong journey (tránh suggest trùng).</summary>
     /// <summary>Lấy experience_id đã suggest trong segment này (tránh suggest trùng trên cùng 1 tuyến).</summary>
@@ -34,6 +48,11 @@ public interface IJourneyRepository
     /// </summary>
     Task<List<JourneySuggestion>> GetSuggestionsByIdsAsync(IEnumerable<Guid> suggestionIds, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Lấy danh sách suggestions đã được tạo cho 1 journey + segment (phục vụ cache/idempotent suggest).
+    /// </summary>
+    Task<List<JourneySuggestion>> GetSuggestionsByJourneySegmentAsync(Guid journeyId, Guid segmentId, CancellationToken cancellationToken = default);
+
     /// <summary>Cập nhật ai_insight của một suggestion sau khi RAG generate xong.</summary>
     Task UpdateSuggestionInsightAsync(Guid suggestionId, string insight, CancellationToken cancellationToken = default);
 
@@ -48,4 +67,9 @@ public interface IJourneyRepository
 
     /// <summary>Ghi nhận một interaction cho suggestion.</summary>
     Task AddSuggestionInteractionAsync(Guid suggestionId, InteractionType interactionType, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lấy các suggestionId đã có interaction (để tránh insert trùng).
+    /// </summary>
+    Task<List<Guid>> GetInteractionSuggestionIdsAsync(IEnumerable<Guid> suggestionIds, InteractionType interactionType, CancellationToken cancellationToken = default);
 }

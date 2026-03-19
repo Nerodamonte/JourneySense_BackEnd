@@ -18,6 +18,10 @@ using System.Text;
 using System.Text.Json.Serialization;
 using JSEA_Application.Services.Journey;
 using JSEA_Application.Services.Profile;
+using JSEA_Presentation.JsonConverters;
+using JSEA_Application.Services.Category;
+using JSEA_Application.Services.Package;
+using JSEA_Application.Services.UserPackage;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -75,6 +79,7 @@ builder.Services.AddScoped<IGoongMapsService, JSEA_Infrastructure.Services.Goong
 builder.Services.AddScoped<IWeatherService, JSEA_Infrastructure.Services.OpenMeteo.OpenMeteoWeatherService>();
 builder.Services.AddScoped<IJourneyService, JSEA_Application.Services.Journey.JourneyService>();
 builder.Services.AddScoped<IJourneyRepository, JourneyRepository>();
+builder.Services.AddScoped<IJourneyProgressService, JourneyProgressService>();
 
 //Embedding
 builder.Services.AddScoped<IExperienceEmbeddingRepository, ExperienceEmbeddingRepository>();
@@ -94,6 +99,8 @@ builder.Services.AddScoped<IRateFeedbackService, JSEA_Application.Services.Exper
 // PayOS
 builder.Services.Configure<PayOSOptions>(builder.Configuration.GetSection("PayOS"));
 builder.Services.AddScoped<IPayOSPaymentService, PayOSPaymentService>();
+builder.Services.AddScoped<ITransactionRepository, TransactionRepository>();
+builder.Services.AddScoped<IPurchaseService, JSEA_Application.Services.Payment.PurchaseService>();
 #endregion
 
 #region Controllers + JSON Enum as string
@@ -104,6 +111,9 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.Converters.Add(
             new JsonStringEnumConverter()
         );
+
+        // Serialize all DateTime as Vietnam time (+07:00) for API responses.
+        options.JsonSerializerOptions.Converters.Add(new VietnamDateTimeJsonConverterFactory());
     });
 
 #endregion

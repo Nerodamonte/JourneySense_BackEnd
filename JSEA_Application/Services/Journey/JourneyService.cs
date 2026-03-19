@@ -193,6 +193,59 @@ public class JourneyService : IJourneyService
         if (j == null)
             return null;
 
+        Guid? selectedSegmentId = null;
+        if (j.JourneyWaypoints != null && j.JourneyWaypoints.Count > 0)
+        {
+            selectedSegmentId = j.JourneyWaypoints
+                .Select(w => w.Suggestion?.SegmentId)
+                .Where(x => x.HasValue)
+                .Select(x => x!.Value)
+                .Distinct()
+                .SingleOrDefault();
+        }
+
+        var routePoints = j.RoutePath != null
+            ? j.RoutePath.Coordinates
+                .Select(c => new GeoPointResponse { Latitude = c.Y, Longitude = c.X })
+                .ToList()
+            : null;
+
+        var segments = j.RouteSegments?
+            .OrderBy(s => s.SegmentOrder ?? int.MaxValue)
+            .Select(s => new RouteSegmentResponse
+            {
+                SegmentId = s.Id,
+                SegmentOrder = s.SegmentOrder,
+                DistanceMeters = s.DistanceMeters,
+                EstimatedDurationMinutes = s.EstimatedDurationMinutes,
+                IsScenic = s.IsScenic,
+                IsBusy = s.IsBusy,
+                IsCulturalArea = s.IsCulturalArea
+            })
+            .ToList();
+
+        var waypoints = j.JourneyWaypoints?
+            .OrderBy(w => w.StopOrder)
+            .Select(w => new JourneyWaypointResponse
+            {
+                WaypointId = w.Id,
+                ExperienceId = w.ExperienceId,
+                SuggestionId = w.SuggestionId,
+                SegmentId = w.Suggestion?.SegmentId,
+                StopOrder = w.StopOrder,
+                PlannedStopMinutes = w.PlannedStopMinutes,
+                Name = w.Experience?.Name,
+                CategoryName = w.Experience?.Category?.Name,
+                Address = w.Experience?.Address,
+                City = w.Experience?.City,
+                Latitude = w.Experience?.Location?.Y,
+                Longitude = w.Experience?.Location?.X,
+                CoverPhotoUrl = w.Experience?.ExperiencePhotos?.FirstOrDefault(p => p.IsCover == true)?.PhotoUrl,
+                DetourDistanceMeters = w.Suggestion?.DetourDistanceMeters,
+                DetourTimeMinutes = w.Suggestion?.DetourTimeMinutes
+            })
+            .ToList();
+
         return new JourneyDetailResponse
         {
             Id = j.Id,
@@ -210,7 +263,11 @@ public class JourneyService : IJourneyService
             Status = Enum.TryParse<JourneyStatus>(j.Status, true, out var js) ? js : null,
             StartedAt = j.StartedAt,
             CompletedAt = j.CompletedAt,
-            CreatedAt = j.CreatedAt
+            CreatedAt = j.CreatedAt,
+            RoutePoints = routePoints,
+            Segments = segments,
+            Waypoints = waypoints,
+            SelectedSegmentId = selectedSegmentId
         };
     }
 
@@ -284,13 +341,25 @@ public class JourneyService : IJourneyService
             })
             .ToList();
 
-        var interactions = suggestionIds.Select(id => new SuggestionInteraction
-        {
-            Id = Guid.NewGuid(),
-            SuggestionId = id,
-            InteractionType = InteractionType.Accepted,
-            InteractedAt = DateTime.UtcNow
-        }).ToList();
+        var existingAcceptedIds = await _journeyRepository.GetInteractionSuggestionIdsAsync(
+            suggestionIds,
+            InteractionType.Accepted,
+            cancellationToken);
+
+        var existingAcceptedSet = existingAcceptedIds.Count > 0
+            ? existingAcceptedIds.ToHashSet()
+            : new HashSet<Guid>();
+
+        var interactions = suggestionIds
+            .Where(id => !existingAcceptedSet.Contains(id))
+            .Select(id => new SuggestionInteraction
+            {
+                Id = Guid.NewGuid(),
+                SuggestionId = id,
+                InteractionType = InteractionType.Accepted,
+                InteractedAt = DateTime.UtcNow
+            })
+            .ToList();
 
         await _journeyRepository.ReplaceWaypointsAsync(
             journeyId,

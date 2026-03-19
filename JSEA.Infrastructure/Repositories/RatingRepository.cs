@@ -1,5 +1,6 @@
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace JSEA_Infrastructure.Repositories;
 
@@ -26,5 +27,12 @@ public class RatingRepository : IRatingRepository
         }
         await _context.SaveChangesAsync(cancellationToken);
         return rating;
+    }
+
+    public async Task<Rating?> GetByVisitIdAsync(Guid visitId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Ratings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.VisitId == visitId, cancellationToken);
     }
 }

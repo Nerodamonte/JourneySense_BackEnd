@@ -33,6 +33,10 @@ public partial class Transaction
     [Column("item_snapshot", TypeName = "jsonb")]
     public string ItemSnapshot { get; set; } = null!;
 
+    [Column("order_code")]
+    [StringLength(50)]
+    public string? OrderCode { get; set; }
+
     [Column("payment_method")]
     [StringLength(50)]
     public string? PaymentMethod { get; set; }

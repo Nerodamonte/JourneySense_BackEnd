@@ -74,6 +74,45 @@ namespace JSEA_Application.Services.Journey
             var remainingExtraMinutes = (journey.TimeBudgetMinutes ?? 0) - baseRouteMinutes - usedMinutes;
             if (remainingExtraMinutes <= 0) return new List<SuggestionResponse>();
 
+            // PRODUCTION: Idempotent suggest.
+            // If suggestions for this journey+segment were already generated earlier,
+            // return the cached set (stable pins) instead of generating new rows.
+            var cached = await _journeyRepository.GetSuggestionsByJourneySegmentAsync(journeyId, segmentId, cancellationToken);
+            if (cached.Count > 0)
+            {
+                // If time budget has changed (waypoints accepted/removed), hide suggestions that can no longer fit.
+                var filtered = cached
+                    .Where(s => (s.DetourTimeMinutes ?? 0) <= remainingExtraMinutes)
+                    .Take(10)
+                    .ToList();
+
+                return filtered.Select(s => new SuggestionResponse
+                {
+                    SuggestionId = s.Id,
+                    ExperienceId = s.ExperienceId,
+                    SegmentId = s.SegmentId,
+                    Name = s.Experience?.Name,
+                    CategoryName = s.Experience?.Category?.Name,
+                    Address = s.Experience?.Address,
+                    City = s.Experience?.City,
+                    Latitude = s.Experience?.Location?.Y,
+                    Longitude = s.Experience?.Location?.X,
+                    CoverPhotoUrl = s.Experience?.ExperiencePhotos?.FirstOrDefault(p => p.IsCover == true)?.PhotoUrl,
+                    PriceRange = s.Experience?.ExperienceDetail?.PriceRange,
+                    CrowdLevel = s.Experience?.ExperienceDetail?.CrowdLevel,
+                    OpeningHours = s.Experience?.ExperienceDetail?.OpeningHours,
+                    AccessibleBy = s.Experience?.AccessibleBy,
+                    AvgRating = s.Experience?.ExperienceMetric?.AvgRating,
+                    TotalRatings = s.Experience?.ExperienceMetric?.TotalRatings,
+                    DetourDistanceMeters = s.DetourDistanceMeters,
+                    DetourTimeMinutes = s.DetourTimeMinutes,
+                    CosineScore = s.CosineScore,
+                    DistanceScore = s.DistanceScore,
+                    FinalSimilarity = s.FinalSimilarity,
+                    AiInsight = s.AiInsight
+                }).ToList();
+            }
+
             // STEP 1: Hard filter
             var alreadySuggested = await _journeyRepository.GetSuggestedExperienceIdsAsync(journeyId, segmentId, cancellationToken);
 

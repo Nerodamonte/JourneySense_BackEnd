@@ -40,4 +40,11 @@ public class FeedbackRepository : IFeedbackRepository
             .Select(f => f.FeedbackText)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<Feedback?> GetByVisitIdAsync(Guid visitId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Feedbacks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(f => f.VisitId == visitId, cancellationToken);
+    }
 }
