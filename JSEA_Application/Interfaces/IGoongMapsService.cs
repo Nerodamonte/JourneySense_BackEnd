@@ -28,6 +28,19 @@ public interface IGoongMapsService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Phân tích tuyến từ tọa độ đi → đến (bỏ qua geocode), trả về danh sách RouteContext (tối đa MaxRouteAlternatives).
+    /// </summary>
+    Task<List<RouteContext>> AnalyzeRouteContextByCoordinatesAsync(
+        double originLatitude,
+        double originLongitude,
+        double destinationLatitude,
+        double destinationLongitude,
+        VehicleType vehicleType,
+        int timeBudgetMinutes,
+        int maxDetourDistanceMeters,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Geocode địa chỉ qua Goong Maps, trả về tọa độ (Point SRID 4326). Null nếu không tìm thấy.
     /// </summary>
     Task<Point?> GeocodeAddressToPointAsync(string address, CancellationToken cancellationToken = default);

@@ -60,8 +60,10 @@ public class JourneyController : ControllerBase
     /// Thiết lập hành trình: điểm đi, điểm đến, loại xe, thời gian, độ lệch, travel vibe, thời gian dừng ưu tiên. (Authorized)
     /// </summary>
     [HttpPost("setup")]
+    [Authorize]
     [ProducesResponseType(typeof(JourneySetupResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status502BadGateway)]
     public async Task<IActionResult> SetupJourney(
         [FromBody] JourneySetupRequest request,
@@ -70,14 +72,13 @@ public class JourneyController : ControllerBase
         if (request == null || !ModelState.IsValid)
             return BadRequest(ModelState);
 
-        Guid? travelerId = null;
         var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (Guid.TryParse(userIdClaim, out var uid))
-            travelerId = uid;
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
 
         var result = await _journeyService.ValidateAndCreateJourneyAsync(request, travelerId, cancellationToken);
         if (result == null)
-            return StatusCode(502, new { message = "Không thể phân tích tuyến. Kiểm tra địa chỉ hoặc API Goong Maps." });
+            return StatusCode(502, new { message = "Không thể phân tích tuyến. Kiểm tra tọa độ hoặc API Goong Maps." });
 
         return Created($"/api/journeys/{result.JourneyId}", result);
     }
