@@ -24,6 +24,12 @@ namespace JSEA_Infrastructure.Repositories
                 .FirstOrDefaultAsync(x => x.Email == email);
         }
 
+        public async Task<User?> GetByIdAsync(Guid userId)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(x => x.Id == userId);
+        }
+
         public async Task CreateAsync(User user)
         {
             _context.Users.Add(user);

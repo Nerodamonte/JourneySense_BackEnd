@@ -45,13 +45,30 @@ public class JourneyService : IJourneyService
         if (!travelerId.HasValue)
             return null;
 
-        var routes = await _goongMapsService.AnalyzeRouteContextAsync(
-            request.OriginAddress,
-            request.DestinationAddress,
-            request.VehicleType,
-            request.TimeBudgetMinutes,
-            request.MaxDetourDistanceMeters,
-            cancellationToken);
+        List<RouteContext> routes;
+        if (request.OriginLatitude.HasValue && request.OriginLongitude.HasValue &&
+            request.DestinationLatitude.HasValue && request.DestinationLongitude.HasValue)
+        {
+            routes = await _goongMapsService.AnalyzeRouteContextByCoordinatesAsync(
+                request.OriginLatitude.Value,
+                request.OriginLongitude.Value,
+                request.DestinationLatitude.Value,
+                request.DestinationLongitude.Value,
+                request.VehicleType,
+                request.TimeBudgetMinutes,
+                request.MaxDetourDistanceMeters,
+                cancellationToken);
+        }
+        else
+        {
+            routes = await _goongMapsService.AnalyzeRouteContextAsync(
+                request.OriginAddress ?? string.Empty,
+                request.DestinationAddress ?? string.Empty,
+                request.VehicleType,
+                request.TimeBudgetMinutes,
+                request.MaxDetourDistanceMeters,
+                cancellationToken);
+        }
 
         if (routes == null || routes.Count == 0)
             return null;

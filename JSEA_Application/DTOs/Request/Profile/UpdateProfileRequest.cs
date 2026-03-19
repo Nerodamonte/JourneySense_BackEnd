@@ -13,6 +13,9 @@ namespace JSEA_Application.DTOs.Request.Profile
         [StringLength(255)]
         public string? FullName { get; set; }
 
+         [StringLength(20)]
+        public string? Phone { get; set; }
+
         [StringLength(500)]
         public string? AvatarUrl { get; set; }
 

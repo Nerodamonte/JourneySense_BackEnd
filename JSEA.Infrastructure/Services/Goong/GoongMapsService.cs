@@ -115,6 +115,89 @@ public class GoongMapsService : IGoongMapsService
         return result;
     }
 
+    public async Task<List<RouteContext>> AnalyzeRouteContextByCoordinatesAsync(
+        double originLatitude,
+        double originLongitude,
+        double destinationLatitude,
+        double destinationLongitude,
+        VehicleType vehicleType,
+        int timeBudgetMinutes,
+        int maxDetourDistanceMeters,
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient();
+        var key = _options.ApiKey;
+        if (string.IsNullOrWhiteSpace(key))
+            return new List<RouteContext>();
+
+        var baseUrl = GetBaseUrl();
+        var vehicle = MapVehicle(vehicleType);
+
+        var originStr = $"{originLatitude:G},{originLongitude:G}";
+        var destStr = $"{destinationLatitude:G},{destinationLongitude:G}";
+        var alternatives = _options.MaxRouteAlternatives > 1 ? "true" : "false";
+
+        var url =
+            $"{baseUrl}Direction?origin={Uri.EscapeDataString(originStr)}&destination={Uri.EscapeDataString(destStr)}&vehicle={vehicle}&alternatives={alternatives}&api_key={key}";
+
+        var response = await client.GetAsync(url, cancellationToken);
+        if (!response.IsSuccessStatusCode) return new List<RouteContext>();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        var root = doc.RootElement;
+        var routes = root.GetProperty("routes");
+        var routeCount = routes.GetArrayLength();
+        if (routeCount == 0) return new List<RouteContext>();
+
+        var maxRoutes = _options.MaxRouteAlternatives <= 0 ? 1 : _options.MaxRouteAlternatives;
+        var take = Math.Min(routeCount, maxRoutes);
+
+        var originPoint = new Point(originLongitude, originLatitude) { SRID = 4326 };
+        var destPoint = new Point(destinationLongitude, destinationLatitude) { SRID = 4326 };
+
+        var result = new List<RouteContext>(take);
+
+        for (var i = 0; i < take; i++)
+        {
+            var route = routes[i];
+            var legs = route.GetProperty("legs");
+            if (legs.GetArrayLength() == 0)
+                continue;
+
+            var leg = legs[0];
+            var distanceMeters = leg.GetProperty("distance").GetProperty("value").GetInt32();
+            var durationSeconds = leg.GetProperty("duration").GetProperty("value").GetInt32();
+            var durationMinutes = (int)Math.Ceiling(durationSeconds / 60.0);
+
+            LineString? routePath = null;
+            string? encoded = null;
+            if (route.TryGetProperty("overview_polyline", out var polylineEl) &&
+                polylineEl.TryGetProperty("points", out var pointsEl))
+            {
+                encoded = pointsEl.GetString();
+                if (!string.IsNullOrEmpty(encoded))
+                    routePath = DecodePolylineToLineString(encoded);
+            }
+
+            result.Add(new RouteContext
+            {
+                RoutePath = routePath,
+                TotalDistanceMeters = distanceMeters,
+                EstimatedDurationMinutes = durationMinutes,
+                OriginLocation = originPoint,
+                DestinationLocation = destPoint,
+                OriginLatitude = originPoint.Y,
+                OriginLongitude = originPoint.X,
+                DestinationLatitude = destPoint.Y,
+                DestinationLongitude = destPoint.X,
+                Polyline = encoded
+            });
+        }
+
+        return result;
+    }
+
     public async Task<Point?> GeocodeAddressToPointAsync(string address, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(address))
