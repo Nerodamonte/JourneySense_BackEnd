@@ -14,13 +14,6 @@ public interface IJourneyProgressService
         WaypointCheckInRequest request,
         CancellationToken cancellationToken = default);
 
-    Task<WaypointExtendResponse?> ExtendStopAsync(
-        Guid journeyId,
-        Guid waypointId,
-        Guid travelerId,
-        WaypointExtendRequest request,
-        CancellationToken cancellationToken = default);
-
     Task<WaypointCheckOutResponse?> CheckOutAsync(
         Guid journeyId,
         Guid waypointId,

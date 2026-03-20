@@ -18,7 +18,4 @@ public class SaveWaypointItemRequest
 
     [Range(1, 100)]
     public int StopOrder { get; set; }
-
-    [Range(0, 1440)]
-    public int? PlannedStopMinutes { get; set; }
 }
