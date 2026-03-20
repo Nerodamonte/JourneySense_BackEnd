@@ -57,6 +57,68 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
+    /// Lấy polyline tuyến đi qua các waypoint đã chọn (để FE vẽ map). (Authorized)
+    /// </summary>
+    [HttpGet("{journeyId:guid}/polyline")]
+    [Authorize]
+    [ProducesResponseType(typeof(JourneyPolylineResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> GetJourneyPolyline(
+        Guid journeyId,
+        CancellationToken cancellationToken,
+        [FromQuery] double? latitude,
+        [FromQuery] double? longitude,
+        [FromQuery] bool excludeCompletedWaypoints = true)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        if ((latitude.HasValue && !longitude.HasValue) || (!latitude.HasValue && longitude.HasValue))
+            return BadRequest(new { message = "Vui lòng truyền đủ latitude và longitude." });
+
+        try
+        {
+            JourneyPolylineResponse? polyline;
+            if (latitude.HasValue && longitude.HasValue)
+            {
+                polyline = await _journeyService.GetNearestWaypointPolylineAsync(
+                    journeyId,
+                    travelerId,
+                    latitude.Value,
+                    longitude.Value,
+                    excludeCompletedWaypoints,
+                    cancellationToken);
+            }
+            else
+            {
+                polyline = await _journeyService.GetJourneyPolylineAsync(journeyId, travelerId, cancellationToken);
+            }
+
+            if (polyline == null)
+                return StatusCode(502, new { message = "Không thể lấy polyline (kiểm tra waypoints/tọa độ hoặc API Goong Maps)." });
+
+            return Ok(polyline);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Tránh leak existence
+            return NotFound(new { message = "Không tìm thấy hành trình." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Thiết lập hành trình: điểm đi, điểm đến, loại xe, thời gian, độ lệch, travel vibe, thời gian dừng ưu tiên. (Authorized)
     /// </summary>
     [HttpPost("setup")]
@@ -150,7 +212,7 @@ public class JourneyController : ControllerBase
         if (!ok)
             return BadRequest(new { message = "Không thể lưu waypoints (kiểm tra route/đề xuất/time budget)." });
 
-        // Additive response: keep message, also return waypointId list for FE check-in/extend/checkout.
+        // Additive response: keep message, also return waypointId list for FE check-in/checkout.
         var detail = await _journeyService.GetByIdAsync(journeyId, cancellationToken);
 
         return Ok(new SaveWaypointsResponse
@@ -163,8 +225,7 @@ public class JourneyController : ControllerBase
                     WaypointId = w.WaypointId,
                     ExperienceId = w.ExperienceId,
                     SuggestionId = w.SuggestionId,
-                    StopOrder = w.StopOrder,
-                    PlannedStopMinutes = w.PlannedStopMinutes
+                    StopOrder = w.StopOrder
                 })
                 .ToList()
         });
@@ -216,35 +277,6 @@ public class JourneyController : ControllerBase
         var result = await _journeyProgressService.CheckInAsync(journeyId, waypointId, travelerId, request, cancellationToken);
         if (result == null)
             return NotFound(new { message = "Không tìm thấy waypoint hoặc hành trình chưa bắt đầu." });
-
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Extend thời gian dừng tại waypoint (preset 10/20/30). (Authorized)
-    /// </summary>
-    [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/extend")]
-    [Authorize]
-    [ProducesResponseType(typeof(WaypointExtendResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> ExtendStop(
-        Guid journeyId,
-        Guid waypointId,
-        [FromBody] WaypointExtendRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (request == null || !ModelState.IsValid)
-            return BadRequest(ModelState);
-
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
-            return Unauthorized(new { message = "Vui lòng đăng nhập." });
-
-        var result = await _journeyProgressService.ExtendStopAsync(journeyId, waypointId, travelerId, request, cancellationToken);
-        if (result == null)
-            return BadRequest(new { message = "Không thể extend (delta không hợp lệ hoặc hành trình/waypoint không tồn tại)." });
 
         return Ok(result);
     }

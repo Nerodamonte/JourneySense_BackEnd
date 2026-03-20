@@ -126,7 +126,7 @@ public class JourneyRepository : IJourneyRepository
             .Where(w => w.JourneyId == journeyId)
             .Include(w => w.Suggestion)
             .SumAsync(w =>
-                (w.PlannedStopMinutes ?? 0) +
+                (w.ActualStopMinutes ?? 0) +
                 (w.Suggestion != null ? w.Suggestion.DetourTimeMinutes ?? 0 : 0),
                 cancellationToken);
     }
@@ -280,13 +280,13 @@ public class JourneyRepository : IJourneyRepository
         if (ids.Count == 0) return new List<Guid>();
 
         return await _context.SuggestionInteractions
-     .AsNoTracking()
-     .Where(i =>
-         i.SuggestionId.HasValue &&
-         ids.Contains(i.SuggestionId.Value) &&
-         i.InteractionType == interactionType)
-     .Select(i => i.SuggestionId.Value)
-     .Distinct()
-     .ToListAsync(cancellationToken);
+            .AsNoTracking()
+            .Where(i =>
+                i.SuggestionId != null &&
+                ids.Contains(i.SuggestionId.Value) &&
+                i.InteractionType == interactionType)
+            .Select(i => i.SuggestionId!.Value)
+            .Distinct()
+            .ToListAsync(cancellationToken);
     }
 }

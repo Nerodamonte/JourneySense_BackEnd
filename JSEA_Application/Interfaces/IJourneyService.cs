@@ -23,7 +23,7 @@ public interface IJourneyService
 
     /// <summary>
     /// Lưu danh sách các điểm user chọn ghé (waypoints) cho một journey theo segment (route) đã chọn.
-    /// totalTimeBudget = base route minutes (Goong) + Σ detour + Σ plannedStopMinutes.
+    /// Time budget check = base route minutes (Goong) + Σ detour minutes.
     /// Replace toàn bộ waypoints hiện tại.
     /// </summary>
     Task<bool> SaveSelectedWaypointsAsync(
@@ -45,5 +45,24 @@ public interface IJourneyService
     /// <summary>
     /// Gợi ý micro-experiences dọc/gần tuyến theo journey: lọc theo vibe (current_mood), weather, timeOfDay, khoảng cách lệch, status. Sắp xếp theo khoảng cách.
     /// </summary>
-   
+
+    /// <summary>
+    /// Lấy polyline tuyến đi qua các waypoint đã chọn (theo StopOrder) để FE vẽ map.
+    /// </summary>
+    Task<JourneyPolylineResponse?> GetJourneyPolylineAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lấy polyline từ vị trí hiện tại của user → waypoint gần nhất trong danh sách waypoint đã lưu của journey.
+    /// Mục tiêu: mỗi lần user di chuyển, FE gọi lại endpoint để nhận tuyến đi đến waypoint gần nhất.
+    /// </summary>
+    Task<JourneyPolylineResponse?> GetNearestWaypointPolylineAsync(
+        Guid journeyId,
+        Guid travelerId,
+        double currentLatitude,
+        double currentLongitude,
+        bool excludeCompletedWaypoints = true,
+        CancellationToken cancellationToken = default);
 }

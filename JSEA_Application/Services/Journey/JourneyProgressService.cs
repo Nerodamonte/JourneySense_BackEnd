@@ -8,8 +8,6 @@ namespace JSEA_Application.Services.Journey;
 
 public class JourneyProgressService : IJourneyProgressService
 {
-    private static readonly HashSet<int> AllowedExtendDeltas = new() { 10, 20, 30 };
-
     private readonly IJourneyRepository _journeyRepository;
     private readonly IVisitRepository _visitRepository;
     private readonly IFeedbackRepository _feedbackRepository;
@@ -129,36 +127,6 @@ public class JourneyProgressService : IJourneyProgressService
             FeedbackId = feedbackId,
             VisitedAt = visit.VisitedAt ?? DateTime.UtcNow,
             ActualArrivalAt = waypoint.ActualArrivalAt
-        };
-    }
-
-    public async Task<WaypointExtendResponse?> ExtendStopAsync(
-        Guid journeyId,
-        Guid waypointId,
-        Guid travelerId,
-        WaypointExtendRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        request ??= new WaypointExtendRequest();
-
-        if (!AllowedExtendDeltas.Contains(request.DeltaMinutes))
-            return null;
-
-        var waypoint = await _journeyRepository.GetWaypointForTravelerAsync(journeyId, waypointId, travelerId, cancellationToken);
-        if (waypoint?.Journey == null) return null;
-
-        if (!waypoint.Journey.StartedAt.HasValue)
-            return null;
-
-        var current = waypoint.PlannedStopMinutes ?? 0;
-        waypoint.PlannedStopMinutes = current + request.DeltaMinutes;
-        await _journeyRepository.UpdateWaypointAsync(waypoint, cancellationToken);
-
-        return new WaypointExtendResponse
-        {
-            JourneyId = journeyId,
-            WaypointId = waypointId,
-            PlannedStopMinutes = waypoint.PlannedStopMinutes
         };
     }
 
