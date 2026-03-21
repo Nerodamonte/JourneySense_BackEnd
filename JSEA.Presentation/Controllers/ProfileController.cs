@@ -1,4 +1,5 @@
 ﻿using JSEA_Application.DTOs.Request.Profile;
+using JSEA_Application.DTOs.Respone.Profile;
 using JSEA_Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -20,8 +21,10 @@ namespace JSEA_Presentation.Controllers
         }
 
         /// <summary>
-        /// Cập nhật profile user. TravelStyle bắt buộc chọn để generate travel_style_text
-        /// phục vụ suggest pipeline. Các field khác có thể bỏ trống.
+        /// Cập nhật profile user.
+        /// TravelStyle optional khi update bình thường; nhưng nếu user chưa có TravelStyle trong DB (lần đầu)
+        /// thì bắt buộc truyền ít nhất 1 để generate travel_style_text phục vụ suggest pipeline.
+        /// Các field khác có thể bỏ trống.
         /// </summary>
         [HttpPut]
         [ProducesResponseType(StatusCodes.Status200OK)]
@@ -38,9 +41,36 @@ namespace JSEA_Presentation.Controllers
             if (!Guid.TryParse(userIdClaim, out var userId))
                 return Unauthorized();
 
-            await _userProfileService.UpdateProfileAsync(userId, request, cancellationToken);
+            try
+            {
+                await _userProfileService.UpdateProfileAsync(userId, request, cancellationToken);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
 
             return Ok(new { message = "Cập nhật profile thành công." });
+        }
+
+        [HttpGet]
+        [ProducesResponseType(typeof(ProfileResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> GetMyProfile(CancellationToken cancellationToken)
+        {
+            var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+                return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+            try
+            {
+                var profile = await _userProfileService.GetProfileAsync(userId, cancellationToken);
+                return Ok(profile);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return Unauthorized(new { message = "Vui lòng đăng nhập." });
+            }
         }
     }
 }
