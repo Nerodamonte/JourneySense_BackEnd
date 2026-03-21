@@ -1,4 +1,6 @@
 ﻿using JSEA_Application.DTOs.Request.Profile;
+using JSEA_Application.DTOs.Respone.Profile;
+using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
 using Microsoft.Extensions.Configuration;
@@ -52,6 +54,13 @@ namespace JSEA_Application.Services.Profile
             var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
             var isNew = profile == null;
 
+            var hasExistingTravelStyle = profile?.TravelStyle != null && profile.TravelStyle.Count > 0;
+            var incomingTravelStyle = request.TravelStyle;
+
+            // Lần đầu bắt buộc truyền travel style để generate travel_style_text cho suggest pipeline.
+            if (!hasExistingTravelStyle && (incomingTravelStyle == null || incomingTravelStyle.Count == 0))
+                throw new InvalidOperationException("Vui lòng chọn ít nhất 1 travel style.");
+
             profile ??= new UserProfile
             {
                 Id = Guid.NewGuid(),
@@ -70,13 +79,33 @@ namespace JSEA_Application.Services.Profile
             if (request.AccessibilityNeeds != null)
                 profile.AccessibilityNeeds = request.AccessibilityNeeds;
 
-            // TravelStyle — lưu array string
-            profile.TravelStyle = request.TravelStyle.Select(v => v.ToString()).ToList();
+            // TravelStyle + TravelStyleText: chỉ cập nhật/generate khi client truyền TravelStyle và nó thực sự thay đổi.
+            if (incomingTravelStyle != null)
+            {
+                if (incomingTravelStyle.Count == 0)
+                    throw new InvalidOperationException("Vui lòng chọn ít nhất 1 travel style.");
 
-            // Generate travel_style_text bằng Gemini
-            var generatedText = await GenerateTravelStyleTextAsync(request.TravelStyle, cancellationToken);
-            if (!string.IsNullOrEmpty(generatedText))
-                profile.TravelStyleText = generatedText;
+                var incomingStrings = incomingTravelStyle
+                    .Select(v => v.ToString())
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .ToList();
+
+                var existingStrings = profile.TravelStyle ?? new List<string>();
+
+                var incomingSet = new HashSet<string>(incomingStrings, StringComparer.OrdinalIgnoreCase);
+                var existingSet = new HashSet<string>(existingStrings, StringComparer.OrdinalIgnoreCase);
+
+                var travelStyleChanged = !incomingSet.SetEquals(existingSet);
+
+                if (travelStyleChanged)
+                {
+                    profile.TravelStyle = incomingStrings;
+
+                    var generatedText = await GenerateTravelStyleTextAsync(incomingTravelStyle, cancellationToken);
+                    if (!string.IsNullOrEmpty(generatedText))
+                        profile.TravelStyleText = generatedText;
+                }
+            }
 
             if (isNew)
                 await _userProfileRepository.CreateAsync(profile, cancellationToken);
@@ -128,6 +157,41 @@ namespace JSEA_Application.Services.Profile
                 .GetProperty("parts")[0]
                 .GetProperty("text")
                 .GetString();
+        }
+
+        public async Task<ProfileResponse> GetProfileAsync(
+    Guid userId,
+    CancellationToken cancellationToken = default)
+        {
+            var user = await _userRepository.GetByIdAsync(userId);
+            if (user == null)
+                throw new UnauthorizedAccessException("User không tồn tại hoặc không hợp lệ.");
+
+            var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
+
+            var travelStyle = new List<VibeType>();
+            if (profile?.TravelStyle != null)
+            {
+                foreach (var s in profile.TravelStyle)
+                {
+                    if (Enum.TryParse<VibeType>(s, ignoreCase: true, out var vibe))
+                        travelStyle.Add(vibe);
+                }
+            }
+
+            return new ProfileResponse
+            {
+                UserId = userId,
+                Email = user.Email,
+                Phone = user.Phone,
+
+                FullName = profile?.FullName,
+                AvatarUrl = profile?.AvatarUrl,
+                Bio = profile?.Bio,
+                AccessibilityNeeds = profile?.AccessibilityNeeds,
+
+                TravelStyle = travelStyle
+            };
         }
     }
 }

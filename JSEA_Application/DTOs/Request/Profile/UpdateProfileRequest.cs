@@ -23,9 +23,10 @@ namespace JSEA_Application.DTOs.Request.Profile
 
         public string? AccessibilityNeeds { get; set; }
 
-        /// <summary>Buộc chọn ít nhất 1 để generate travel_style_text cho suggest pipeline.</summary>
-        [Required(ErrorMessage = "Vui lòng chọn ít nhất 1 travel style")]
-        [MinLength(1, ErrorMessage = "Vui lòng chọn ít nhất 1 travel style")]
-        public List<VibeType> TravelStyle { get; set; } = new();
+        /// <summary>
+        /// TravelStyle optional khi update bình thường.
+        /// Nếu user chưa có TravelStyle trong DB (lần đầu) thì backend sẽ yêu cầu truyền ít nhất 1.
+        /// </summary>
+        public List<VibeType>? TravelStyle { get; set; }
     }
 }

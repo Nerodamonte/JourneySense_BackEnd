@@ -1,4 +1,5 @@
 ﻿using JSEA_Application.DTOs.Request.Profile;
+using JSEA_Application.DTOs.Respone.Profile;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,5 +15,7 @@ namespace JSEA_Application.Interfaces
         /// Tự động generate travel_style_text bằng Gemini từ travel_style array rồi lưu vào DB.
         /// </summary>
         Task UpdateProfileAsync(Guid userId, UpdateProfileRequest request, CancellationToken cancellationToken = default);
+
+        Task<ProfileResponse> GetProfileAsync(Guid userId, CancellationToken cancellationToken = default);
     }
 }
