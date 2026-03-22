@@ -1,4 +1,4 @@
-﻿using JSEA_Application.Enums;
+using JSEA_Application.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,5 +20,7 @@ namespace JSEA_Application.DTOs.Respone.Profile
         public string? AccessibilityNeeds { get; set; }
 
         public List<VibeType> TravelStyle { get; set; } = new();
+
+        public int RewardPoints { get; set; }
     }
 }

@@ -1,4 +1,4 @@
-﻿using JSEA_Application.DTOs.Request.Profile;
+using JSEA_Application.DTOs.Request.Profile;
 using JSEA_Application.DTOs.Respone.Profile;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
@@ -190,7 +190,8 @@ namespace JSEA_Application.Services.Profile
                 Bio = profile?.Bio,
                 AccessibilityNeeds = profile?.AccessibilityNeeds,
 
-                TravelStyle = travelStyle
+                TravelStyle = travelStyle,
+                RewardPoints = profile?.RewardPoints ?? 0
             };
         }
     }

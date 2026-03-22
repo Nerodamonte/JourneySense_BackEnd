@@ -16,15 +16,18 @@ public class JourneyController : ControllerBase
     private readonly IJourneyService _journeyService;
     private readonly ISuggestService _suggestService;
     private readonly IJourneyProgressService _journeyProgressService;
+    private readonly IJourneyShareService _journeyShareService;
 
     public JourneyController(
         IJourneyService journeyService,
         ISuggestService suggestService,
-        IJourneyProgressService journeyProgressService)
+        IJourneyProgressService journeyProgressService,
+        IJourneyShareService journeyShareService)
     {
         _journeyService = journeyService;
         _suggestService = suggestService;
         _journeyProgressService = journeyProgressService;
+        _journeyShareService = journeyShareService;
     }
 
     /// <summary>
@@ -44,6 +47,16 @@ public class JourneyController : ControllerBase
         return Ok(list);
     }
 
+    [HttpGet("shared/{shareCode}")]
+    [ProducesResponseType(typeof(PublicSharedJourneyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSharedJourney(string shareCode, CancellationToken cancellationToken)
+    {
+        var result = await _journeyShareService.GetPublicByShareCodeAsync(shareCode, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không tìm thấy link chia sẻ." });
+        return Ok(result);
+    }
 
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(JourneyDetailResponse), StatusCodes.Status200OK)]
@@ -340,5 +353,49 @@ public class JourneyController : ControllerBase
             return BadRequest(new { message = "Không thể ghi nhận interaction." });
 
         return Ok(new { message = "Đã ghi nhận interaction." });
+    }
+
+    [HttpPost("{journeyId:guid}/share")]
+    [Authorize]
+    [ProducesResponseType(typeof(ShareJourneyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ShareJourney(Guid journeyId, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var result = await _journeyShareService.ShareJourneyAsync(journeyId, travelerId, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không tìm thấy hành trình." });
+
+        return Ok(result);
+    }
+
+    [HttpPut("{journeyId:guid}/journey-feedback")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateJourneyFeedback(
+        Guid journeyId,
+        [FromBody] UpdateJourneyFeedbackRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var ok = await _journeyService.UpdateJourneyFeedbackAsync(
+            journeyId,
+            travelerId,
+            request?.JourneyFeedback,
+            cancellationToken);
+
+        if (!ok)
+            return NotFound(new { message = "Không tìm thấy hành trình." });
+
+        return Ok(new { message = "Đã cập nhật feedback." });
     }
 }

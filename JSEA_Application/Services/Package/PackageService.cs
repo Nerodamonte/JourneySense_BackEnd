@@ -41,6 +41,7 @@ public class PackageService : IPackageService
             Benefit = dto.Benefit,
             IsPopular = dto.IsPopular,
             IsActive = dto.IsActive,
+            PointsRequired = dto.PointsRequired,
             CreatedAt = DateTime.UtcNow
         };
 
@@ -65,6 +66,7 @@ public class PackageService : IPackageService
         entity.Benefit = dto.Benefit;
         entity.IsPopular = dto.IsPopular;
         entity.IsActive = dto.IsActive;
+        entity.PointsRequired = dto.PointsRequired;
 
         await _packageRepository.UpdateAsync(entity, cancellationToken);
         return MapToResponse(entity);
@@ -105,7 +107,8 @@ public class PackageService : IPackageService
             Benefit = p.Benefit,
             IsPopular = p.IsPopular,
             IsActive = p.IsActive ?? false,
-            CreatedAt = p.CreatedAt
+            CreatedAt = p.CreatedAt,
+            PointsRequired = p.PointsRequired
         };
     }
 

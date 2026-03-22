@@ -87,6 +87,9 @@ public partial class Journey
     [Column("updated_at")]
     public DateTime? UpdatedAt { get; set; }
 
+    [Column("journey_feedback")]
+    public string? JourneyFeedback { get; set; }
+
     [InverseProperty("Journey")]
     public virtual ICollection<JourneyCrowdLog> JourneyCrowdLogs { get; set; } = new List<JourneyCrowdLog>();
 
@@ -108,4 +111,7 @@ public partial class Journey
 
     [InverseProperty("Journey")]
     public virtual ICollection<Visit> Visits { get; set; } = new List<Visit>();
+
+    [InverseProperty("Journey")]
+    public virtual ICollection<SharedJourney> SharedJourneys { get; set; } = new List<SharedJourney>();
 }
