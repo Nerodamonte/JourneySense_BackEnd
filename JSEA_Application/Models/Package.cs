@@ -43,6 +43,9 @@ public partial class Package
     [Column("is_active")]
     public bool? IsActive { get; set; }
 
+    [Column("points_required")]
+    public int? PointsRequired { get; set; }
+
     [Column("created_at")]
     public DateTime? CreatedAt { get; set; }
 

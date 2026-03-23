@@ -89,4 +89,10 @@ public partial class User
 
     [InverseProperty("Traveler")]
     public virtual ICollection<Visit> Visits { get; set; } = new List<Visit>();
+
+    [InverseProperty("User")]
+    public virtual ICollection<SharedJourney> SharedJourneys { get; set; } = new List<SharedJourney>();
+
+    [InverseProperty("User")]
+    public virtual ICollection<RewardTransaction> RewardTransactions { get; set; } = new List<RewardTransaction>();
 }

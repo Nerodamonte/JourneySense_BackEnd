@@ -44,6 +44,9 @@ public partial class UserProfile
     [Column("travel_style_text", TypeName = "text")]
     public string? TravelStyleText { get; set; }
 
+    [Column("reward_points")]
+    public int RewardPoints { get; set; }
+
     [ForeignKey("UserId")]
     [InverseProperty("UserProfile")]
     public virtual User User { get; set; } = null!;

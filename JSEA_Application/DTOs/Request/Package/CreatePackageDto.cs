@@ -29,5 +29,8 @@ public class CreatePackageDto
     public bool? IsPopular { get; set; }
 
     public bool IsActive { get; set; } = true;
+
+    [Range(0, int.MaxValue)]
+    public int? PointsRequired { get; set; }
 }
 

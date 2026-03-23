@@ -1,12 +1,59 @@
 using JSEA_Application.Interfaces;
+using JSEA_Application.Models;
 
 namespace JSEA_Application.Services.Experience;
 
-/// <summary>Schema v10 không có reward_points trong user_profiles. Service này tạm no-op.</summary>
 public class RewardService : IRewardService
 {
-    public Task AddRewardPointsAsync(Guid userId, int points, string reason, CancellationToken cancellationToken = default)
+    private readonly IUserProfileRepository _userProfileRepository;
+    private readonly IRewardTransactionRepository _rewardTransactionRepository;
+
+    public RewardService(
+        IUserProfileRepository userProfileRepository,
+        IRewardTransactionRepository rewardTransactionRepository)
     {
-        return Task.CompletedTask;
+        _userProfileRepository = userProfileRepository;
+        _rewardTransactionRepository = rewardTransactionRepository;
+    }
+
+    public async Task AddRewardPointsAsync(
+        Guid userId,
+        int points,
+        string reason,
+        CancellationToken cancellationToken = default,
+        Guid? achievementId = null,
+        Guid? refId = null,
+        string? refType = null)
+    {
+        if (points <= 0)
+            return;
+
+        var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
+        if (profile == null)
+        {
+            profile = new UserProfile
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                RewardPoints = points
+            };
+            await _userProfileRepository.CreateAsync(profile, cancellationToken);
+        }
+        else
+        {
+            profile.RewardPoints += points;
+            await _userProfileRepository.UpdateAsync(profile, cancellationToken);
+        }
+
+        await _rewardTransactionRepository.AddAsync(new RewardTransaction
+        {
+            UserId = userId,
+            Type = "earned",
+            Points = points,
+            Description = reason,
+            AchievementId = achievementId,
+            RefId = refId,
+            RefType = refType
+        }, cancellationToken);
     }
 }

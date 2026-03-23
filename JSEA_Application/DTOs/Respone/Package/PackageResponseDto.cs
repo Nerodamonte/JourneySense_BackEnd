@@ -13,5 +13,7 @@ public class PackageResponseDto
     public bool? IsPopular { get; set; }
     public bool IsActive { get; set; }
     public DateTime? CreatedAt { get; set; }
+
+    public int? PointsRequired { get; set; }
 }
 

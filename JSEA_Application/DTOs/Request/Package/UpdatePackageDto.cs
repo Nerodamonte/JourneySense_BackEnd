@@ -29,5 +29,8 @@ public class UpdatePackageDto
     public bool? IsPopular { get; set; }
 
     public bool IsActive { get; set; }
+
+    [Range(0, int.MaxValue)]
+    public int? PointsRequired { get; set; }
 }
 

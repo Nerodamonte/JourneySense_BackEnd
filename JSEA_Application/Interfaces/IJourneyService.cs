@@ -21,6 +21,12 @@ public interface IJourneyService
     /// </summary>
     Task<JourneyDetailResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    Task<bool> UpdateJourneyFeedbackAsync(
+        Guid journeyId,
+        Guid travelerId,
+        string? journeyFeedback,
+        CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Lưu danh sách các điểm user chọn ghé (waypoints) cho một journey theo segment (route) đã chọn.
     /// Time budget check = base route minutes (Goong) + Σ detour minutes.

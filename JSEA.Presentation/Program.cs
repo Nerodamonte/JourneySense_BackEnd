@@ -86,6 +86,10 @@ builder.Services.AddScoped<IWeatherService, JSEA_Infrastructure.Services.OpenMet
 builder.Services.AddScoped<IJourneyService, JourneyService>();
 builder.Services.AddScoped<IJourneyRepository, JourneyRepository>();
 builder.Services.AddScoped<IJourneyProgressService, JourneyProgressService>();
+builder.Services.AddScoped<IAchievementRepository, AchievementRepository>();
+builder.Services.AddScoped<IRewardTransactionRepository, RewardTransactionRepository>();
+builder.Services.AddScoped<ISharedJourneyRepository, SharedJourneyRepository>();
+builder.Services.AddScoped<IJourneyShareService, JSEA_Application.Services.Journey.JourneyShareService>();
 
 //Embedding
 builder.Services.AddScoped<IExperienceEmbeddingRepository, ExperienceEmbeddingRepository>();

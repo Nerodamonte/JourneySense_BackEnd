@@ -38,6 +38,8 @@ public class JourneyDetailResponse
     public DateTime? CompletedAt { get; set; }
     public DateTime? CreatedAt { get; set; }
 
+    public string? JourneyFeedback { get; set; }
+
     /// <summary>
     /// Main route geometry (WGS84) for reloading map after app restart.
     /// </summary>

@@ -281,6 +281,7 @@ public class JourneyService : IJourneyService
             StartedAt = j.StartedAt,
             CompletedAt = j.CompletedAt,
             CreatedAt = j.CreatedAt,
+            JourneyFeedback = j.JourneyFeedback,
             RoutePoints = routePoints,
             Segments = segments,
             Waypoints = waypoints,
@@ -533,6 +534,22 @@ public class JourneyService : IJourneyService
             DistanceMeters = route.TotalDistanceMeters,
             EstimatedDurationMinutes = route.EstimatedDurationMinutes
         };
+    }
+
+    public async Task<bool> UpdateJourneyFeedbackAsync(
+        Guid journeyId,
+        Guid travelerId,
+        string? journeyFeedback,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetBasicByIdAsync(journeyId, cancellationToken);
+        if (journey == null || journey.TravelerId != travelerId)
+            return false;
+
+        journey.JourneyFeedback = string.IsNullOrWhiteSpace(journeyFeedback) ? null : journeyFeedback.Trim();
+        journey.UpdatedAt = DateTime.UtcNow;
+        await _journeyRepository.UpdateAsync(journey, cancellationToken);
+        return true;
     }
 
     private sealed record WaypointCandidate(JourneyWaypoint Waypoint, Point Location);

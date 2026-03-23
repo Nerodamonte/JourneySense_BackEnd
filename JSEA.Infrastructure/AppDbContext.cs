@@ -46,6 +46,9 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<UserPackage> UserPackages { get; set; }
     public virtual DbSet<UserProfile> UserProfiles { get; set; }
     public virtual DbSet<Visit> Visits { get; set; }
+    public virtual DbSet<SharedJourney> SharedJourneys { get; set; }
+    public virtual DbSet<Achievement> Achievements { get; set; }
+    public virtual DbSet<RewardTransaction> RewardTransactions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -197,6 +200,44 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.Traveler).WithMany(p => p.Journeys)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_journey_user");
+        });
+
+        modelBuilder.Entity<SharedJourney>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("shared_journeys_pkey");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+            entity.Property(e => e.ViewCount).HasDefaultValue(0);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.HasIndex(e => e.ShareCode).IsUnique();
+            entity.HasOne(d => d.Journey).WithMany(p => p.SharedJourneys)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_shared_journey_journey");
+            entity.HasOne(d => d.User).WithMany(p => p.SharedJourneys)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_shared_journey_user");
+        });
+
+        modelBuilder.Entity<Achievement>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("achievements_pkey");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.Points).HasDefaultValue(0);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.HasIndex(e => e.Code).IsUnique();
+        });
+
+        modelBuilder.Entity<RewardTransaction>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("reward_transactions_pkey");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
+            entity.HasOne(d => d.User).WithMany(p => p.RewardTransactions)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_reward_tx_user");
+            entity.HasOne(d => d.Achievement).WithMany(p => p.RewardTransactions)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_reward_tx_achievement");
         });
 
         modelBuilder.Entity<JourneyCrowdLog>(entity =>
@@ -364,6 +405,7 @@ public partial class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("user_profiles_pkey");
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.RewardPoints).HasDefaultValue(0);
             entity.HasOne(d => d.User)
                 .WithOne(p => p.UserProfile)
                 .HasForeignKey<UserProfile>(d => d.UserId)
