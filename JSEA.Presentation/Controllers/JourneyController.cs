@@ -3,6 +3,7 @@ using JSEA_Application.DTOs.Request.JourneyProgress;
 using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.DTOs.Respone.JourneyProgress;
 using JSEA_Application.Interfaces;
+using JSEA_Application.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -242,6 +243,40 @@ public class JourneyController : ControllerBase
                 })
                 .ToList()
         });
+    }
+
+    /// <summary>
+    /// Cập nhật mood trong giai đoạn planning (trước khi lưu waypoints).
+    /// Khi đổi mood, backend sẽ xóa cache suggestions để lần gọi suggest kế tiếp regenerate theo mood mới.
+    /// </summary>
+    [HttpPut("{journeyId:guid}/mood")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateMood(
+        Guid journeyId,
+        [FromBody] UpdateJourneyMoodRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var ok = await _journeyService.UpdateCurrentMoodAsync(
+            journeyId,
+            travelerId,
+            request.CurrentMood,
+            cancellationToken);
+
+        if (!ok)
+            return BadRequest(new { message = "Không thể cập nhật mood (chỉ cho phép khi đang planning và chưa lưu waypoints)." });
+
+        return Ok(new { message = "Đã cập nhật mood.", currentMood = request.CurrentMood });
     }
 
     /// <summary>

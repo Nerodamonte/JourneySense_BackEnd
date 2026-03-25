@@ -407,6 +407,35 @@ public class JourneyService : IJourneyService
         return true;
     }
 
+    public async Task<bool> UpdateCurrentMoodAsync(
+        Guid journeyId,
+        Guid travelerId,
+        MoodType? currentMood,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetByIdAsync(journeyId, cancellationToken);
+        if (journey == null) return false;
+        if (journey.TravelerId != travelerId) return false;
+
+        // Only allow mood changes while planning (before selecting waypoints).
+        if (!string.Equals(journey.Status, "planning", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var waypointCount = await _journeyRepository.GetAcceptedWaypointCountAsync(journeyId, cancellationToken);
+        if (waypointCount > 0)
+            return false;
+
+        journey.CurrentMood = currentMood?.ToString();
+        journey.UpdatedAt = DateTime.UtcNow;
+
+        await _journeyRepository.UpdateAsync(journey, cancellationToken);
+
+        // Clear existing suggestions so suggest() regenerates with new mood.
+        await _journeyRepository.ClearSuggestionsForJourneyAsync(journeyId, cancellationToken);
+
+        return true;
+    }
+
     public async Task<JourneyPolylineResponse?> GetJourneyPolylineAsync(
         Guid journeyId,
         Guid travelerId,
