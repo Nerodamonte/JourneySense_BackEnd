@@ -30,7 +30,6 @@ namespace JSEA_Application.Services.Journey
         // Mood tuning: keep profile dominant, mood nudges ranking.
         private const decimal MoodBoostHappy = 1.15m;
         private const decimal MoodBoostSad = 1.20m;
-        private const decimal MoodBoostNormal = 1.10m;
         private const decimal MoodBoostStressed = 1.25m;
 
         // Diversity guard: ensure at least this many mood-aligned suggestions (if available).
@@ -426,7 +425,12 @@ $"https://generativelanguage.googleapis.com/v1beta/models/{GeminiEmbedModel}:emb
         {
             if (string.IsNullOrWhiteSpace(currentMood))
                 return null;
-            return Enum.TryParse<MoodType>(currentMood, ignoreCase: true, out var m) ? m : null;
+
+            if (!Enum.TryParse<MoodType>(currentMood, ignoreCase: true, out var m))
+                return null;
+
+            // Treat Normal as baseline (no mood boost / no mood quota).
+            return m == MoodType.Normal ? null : m;
         }
 
         private static decimal GetMoodBoost(MoodType? mood)
@@ -436,7 +440,6 @@ $"https://generativelanguage.googleapis.com/v1beta/models/{GeminiEmbedModel}:emb
                 MoodType.Happy => MoodBoostHappy,
                 MoodType.Sad => MoodBoostSad,
                 MoodType.Stressed => MoodBoostStressed,
-                MoodType.Normal => MoodBoostNormal,
                 _ => 1.0m
             };
         }
@@ -449,7 +452,8 @@ $"https://generativelanguage.googleapis.com/v1beta/models/{GeminiEmbedModel}:emb
                 MoodType.Stressed => new[] { "Relax", "Chill" },
                 MoodType.Sad => new[] { "Chill", "Relax", "LocalVibes" },
                 MoodType.Happy => new[] { "Adventure", "Explorer", "Foodie" },
-                MoodType.Normal => new[] { "Explorer" },
+                // Normal means no extra vibe push.
+                MoodType.Normal => Array.Empty<string>(),
                 _ => Array.Empty<string>()
             };
         }
