@@ -206,6 +206,35 @@ public class JourneyRepository : IJourneyRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task ClearSuggestionsForJourneyAsync(Guid journeyId, CancellationToken cancellationToken = default)
+    {
+        // NOTE: Only safe during planning when no waypoints reference suggestions.
+        var suggestionIds = await _context.JourneySuggestions
+            .AsNoTracking()
+            .Where(s => s.JourneyId == journeyId)
+            .Select(s => s.Id)
+            .ToListAsync(cancellationToken);
+
+        if (!suggestionIds.Any())
+            return;
+
+        var interactions = await _context.SuggestionInteractions
+            .Where(i => i.SuggestionId.HasValue && suggestionIds.Contains(i.SuggestionId.Value))
+            .ToListAsync(cancellationToken);
+
+        if (interactions.Any())
+            _context.SuggestionInteractions.RemoveRange(interactions);
+
+        var suggestions = await _context.JourneySuggestions
+            .Where(s => s.JourneyId == journeyId)
+            .ToListAsync(cancellationToken);
+
+        if (suggestions.Any())
+            _context.JourneySuggestions.RemoveRange(suggestions);
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task UpdateSuggestionInsightAsync(Guid suggestionId, string insight, CancellationToken cancellationToken = default)
     {
         var suggestion = await _context.JourneySuggestions

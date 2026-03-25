@@ -53,6 +53,12 @@ public interface IJourneyRepository
     /// </summary>
     Task<List<JourneySuggestion>> GetSuggestionsByJourneySegmentAsync(Guid journeyId, Guid segmentId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Xóa toàn bộ suggestions (và interactions liên quan) của một journey.
+    /// Dùng khi user đổi context (vd: mood) trong giai đoạn planning để regenerate suggestions.
+    /// </summary>
+    Task ClearSuggestionsForJourneyAsync(Guid journeyId, CancellationToken cancellationToken = default);
+
     /// <summary>Cập nhật ai_insight của một suggestion sau khi RAG generate xong.</summary>
     Task UpdateSuggestionInsightAsync(Guid suggestionId, string insight, CancellationToken cancellationToken = default);
 

@@ -49,6 +49,16 @@ public interface IJourneyService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Cập nhật current_mood của journey trong giai đoạn planning.
+    /// Khi đổi mood, sẽ xóa cache suggestions để lần gọi suggest kế tiếp regenerate theo mood mới.
+    /// </summary>
+    Task<bool> UpdateCurrentMoodAsync(
+        Guid journeyId,
+        Guid travelerId,
+        MoodType? currentMood,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gợi ý micro-experiences dọc/gần tuyến theo journey: lọc theo vibe (current_mood), weather, timeOfDay, khoảng cách lệch, status. Sắp xếp theo khoảng cách.
     /// </summary>
 
