@@ -311,10 +311,6 @@ public class JourneyService : IJourneyService
         if (suggestionIds.Count != waypoints.Count)
             return false;
 
-        var stopOrders = waypoints.Select(w => w.StopOrder).ToList();
-        if (stopOrders.Count != stopOrders.Distinct().Count())
-            return false;
-
         var suggestions = await _journeyRepository.GetSuggestionsByIdsAsync(suggestionIds, cancellationToken);
         if (suggestions.Count != suggestionIds.Count)
             return false;
@@ -341,19 +337,29 @@ public class JourneyService : IJourneyService
 
         var suggestionsById = suggestions.ToDictionary(s => s.Id, s => s);
 
-        var newWaypoints = waypoints
-            .OrderBy(w => w.StopOrder)
+        // IMPORTANT UX: StopOrder should reflect forward order along the selected main route,
+        // not the order user tapped items. We compute StopOrder by projecting each waypoint onto the
+        // selected segment polyline and sorting by progress along that line.
+        var routeLine = segment.SegmentPath;
+        var waypointsWithProgress = waypoints
             .Select(w =>
             {
                 var s = suggestionsById[w.SuggestionId];
-                return new JourneyWaypoint
-                {
-                    Id = Guid.NewGuid(),
-                    JourneyId = journeyId,
-                    ExperienceId = s.ExperienceId,
-                    SuggestionId = s.Id,
-                    StopOrder = w.StopOrder
-                };
+                var p = s.Experience?.Location;
+                var progressMeters = p == null ? double.MaxValue : GetAlongRouteMeters(routeLine, p);
+                return new { Suggestion = s, ProgressMeters = progressMeters };
+            })
+            .OrderBy(x => x.ProgressMeters)
+            .ToList();
+
+        var newWaypoints = waypointsWithProgress
+            .Select((x, idx) => new JourneyWaypoint
+            {
+                Id = Guid.NewGuid(),
+                JourneyId = journeyId,
+                ExperienceId = x.Suggestion.ExperienceId,
+                SuggestionId = x.Suggestion.Id,
+                StopOrder = idx + 1
             })
             .ToList();
 
@@ -488,26 +494,94 @@ public class JourneyService : IJourneyService
             .Select(w => new WaypointCandidate(w, w.Experience!.Location!))
             .ToList() ?? new List<WaypointCandidate>();
 
-        if (candidates.Count == 0)
-            throw new InvalidOperationException("Không có waypoint hợp lệ để tạo polyline.");
-
-        // Chọn waypoint gần nhất theo khoảng cách đường chim bay (Haversine) để tránh gọi N lần Directions.
-        var nearest = candidates
-            .Select(c => new
-            {
-                c.Waypoint,
-                c.Location,
-                DistanceMeters = HaversineDistanceMeters(currentLatitude, currentLongitude, c.Location.Y, c.Location.X)
-            })
-            .OrderBy(x => x.DistanceMeters)
-            .First();
-
         var vehicle = Enum.TryParse<VehicleType>(journey.VehicleType, true, out var vt)
             ? vt
             : VehicleType.Car;
 
         var origin = new Point(currentLongitude, currentLatitude) { SRID = 4326 };
-        var destination = new Point(nearest.Location.X, nearest.Location.Y) { SRID = 4326 };
+
+        // If no remaining waypoints, keep the same endpoint behavior and route user to destination.
+        if (candidates.Count == 0)
+        {
+            if (journey.DestinationLocation == null)
+                throw new InvalidOperationException("Hành trình thiếu tọa độ destination.");
+
+            var routeToDestination = await _goongMapsService.GetDirectionRouteAsync(
+                origin,
+                journey.DestinationLocation,
+                vehicle,
+                waypoints: null,
+                cancellationToken);
+
+            if (routeToDestination == null)
+                return null;
+
+            var destPoints = routeToDestination.RoutePath?.Coordinates
+                .Select(c => new GeoPointResponse { Latitude = c.Y, Longitude = c.X })
+                .ToList() ?? new List<GeoPointResponse>();
+
+            return new JourneyPolylineResponse
+            {
+                JourneyId = journey.Id,
+                TargetWaypointId = null,
+                TargetExperienceId = null,
+                Polyline = routeToDestination.Polyline,
+                Points = destPoints,
+                DistanceMeters = routeToDestination.TotalDistanceMeters,
+                EstimatedDurationMinutes = routeToDestination.EstimatedDurationMinutes
+            };
+        }
+
+        // Prefer the next waypoint that is "ahead" along the main route (forward progress),
+        // to avoid confusing backtracking when a waypoint is geometrically close but behind.
+        var routeLine = journey.RoutePath ?? journey.ActualRoutePath;
+        WaypointCandidate selected;
+        if (routeLine != null)
+        {
+            var currentProgress = GetAlongRouteMeters(routeLine, origin);
+
+            var byProgress = candidates
+                .Select(c => new
+                {
+                    Candidate = c,
+                    ProgressMeters = GetAlongRouteMeters(routeLine, c.Location)
+                })
+                .ToList();
+
+            const double epsilonMeters = 50; // tolerate small GPS/projection noise
+
+            var ahead = byProgress
+                .Where(x => x.ProgressMeters >= currentProgress - epsilonMeters)
+                .OrderBy(x => x.ProgressMeters)
+                .FirstOrDefault();
+
+            if (ahead != null)
+            {
+                selected = ahead.Candidate;
+            }
+            else
+            {
+                // If user has passed all remaining waypoints (rare), pick the closest-behind by progress
+                // to minimize backtracking.
+                selected = byProgress
+                    .OrderByDescending(x => x.ProgressMeters)
+                    .First().Candidate;
+            }
+        }
+        else
+        {
+            // Fallback: if we don't have a route line stored, use Haversine-nearest.
+            selected = candidates
+                .Select(c => new
+                {
+                    Candidate = c,
+                    DistanceMeters = HaversineDistanceMeters(currentLatitude, currentLongitude, c.Location.Y, c.Location.X)
+                })
+                .OrderBy(x => x.DistanceMeters)
+                .First().Candidate;
+        }
+
+        var destination = new Point(selected.Location.X, selected.Location.Y) { SRID = 4326 };
 
         var route = await _goongMapsService.GetDirectionRouteAsync(
             origin,
@@ -526,8 +600,8 @@ public class JourneyService : IJourneyService
         return new JourneyPolylineResponse
         {
             JourneyId = journey.Id,
-            TargetWaypointId = nearest.Waypoint.Id,
-            TargetExperienceId = nearest.Waypoint.ExperienceId,
+            TargetWaypointId = selected.Waypoint.Id,
+            TargetExperienceId = selected.Waypoint.ExperienceId,
             Polyline = route.Polyline,
             Points = routePoints,
             DistanceMeters = route.TotalDistanceMeters,
@@ -547,6 +621,55 @@ public class JourneyService : IJourneyService
                 Math.Sin(dLon / 2) * Math.Sin(dLon / 2);
         var c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
         return (int)Math.Round(R * c);
+    }
+
+    private static double GetAlongRouteMeters(LineString routeLine, Point point)
+    {
+        var coords = routeLine.Coordinates;
+        if (coords == null || coords.Length < 2)
+            return 0;
+
+        var px = point.X;
+        var py = point.Y;
+
+        double bestDistanceMeters = double.MaxValue;
+        double bestAlongMeters = 0;
+
+        double cumulativeMeters = 0;
+
+        for (var i = 0; i < coords.Length - 1; i++)
+        {
+            var ax = coords[i].X;
+            var ay = coords[i].Y;
+            var bx = coords[i + 1].X;
+            var by = coords[i + 1].Y;
+
+            var abx = bx - ax;
+            var aby = by - ay;
+            var apx = px - ax;
+            var apy = py - ay;
+
+            var abLen2 = abx * abx + aby * aby;
+            var t = abLen2 <= 0 ? 0 : (apx * abx + apy * aby) / abLen2;
+            if (t < 0) t = 0;
+            if (t > 1) t = 1;
+
+            var projX = ax + t * abx;
+            var projY = ay + t * aby;
+
+            var distToSegmentMeters = HaversineDistanceMeters(py, px, projY, projX);
+            if (distToSegmentMeters < bestDistanceMeters)
+            {
+                bestDistanceMeters = distToSegmentMeters;
+
+                var segMeters = HaversineDistanceMeters(ay, ax, by, bx);
+                bestAlongMeters = cumulativeMeters + t * segMeters;
+            }
+
+            cumulativeMeters += HaversineDistanceMeters(ay, ax, by, bx);
+        }
+
+        return bestAlongMeters;
     }
 
     private static double DegreesToRadians(double degrees) => degrees * (Math.PI / 180.0);
