@@ -301,6 +301,35 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
+    /// Hoàn tất hành trình (FE bấm "Complete journey"). Set CompletedAt và chuyển status sang Completed. (Authorized)
+    /// </summary>
+    [HttpPost("{journeyId:guid}/complete")]
+    [Authorize]
+    [ProducesResponseType(typeof(CompleteJourneyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CompleteJourney(Guid journeyId, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        try
+        {
+            var result = await _journeyProgressService.CompleteJourneyAsync(journeyId, travelerId, cancellationToken);
+            if (result == null)
+                return NotFound(new { message = "Không tìm thấy hành trình." });
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Check-in tại waypoint (FE bấm "Ghé thăm"). Tạo Visit; Feedback optional. (Authorized)
     /// </summary>
     [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/checkin")]
