@@ -3,6 +3,7 @@ using JSEA_Application.DTOs.Respone.JourneyProgress;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
+using System;
 
 namespace JSEA_Application.Services.Journey;
 
@@ -43,6 +44,42 @@ public class JourneyProgressService : IJourneyProgressService
         {
             JourneyId = journey.Id,
             StartedAt = journey.StartedAt!.Value
+        };
+    }
+
+    public async Task<CompleteJourneyResponse?> CompleteJourneyAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetBasicByIdAsync(journeyId, cancellationToken);
+        if (journey == null) return null;
+        if (journey.TravelerId != travelerId) return null;
+
+        // Defensive parsing: DB may store either enum string (Completed) or snake/lowercase (completed).
+        JourneyStatus? status = null;
+        if (!string.IsNullOrWhiteSpace(journey.Status) && Enum.TryParse<JourneyStatus>(journey.Status, ignoreCase: true, out var parsed))
+            status = parsed;
+
+        if (status == JourneyStatus.Cancelled || string.Equals(journey.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Hành trình đã bị hủy, không thể hoàn tất.");
+
+        if (!journey.StartedAt.HasValue)
+            throw new InvalidOperationException("Hành trình chưa bắt đầu, không thể hoàn tất.");
+
+        // Idempotent: if already completed, return existing timestamp.
+        if (status != JourneyStatus.Completed || !journey.CompletedAt.HasValue)
+        {
+            journey.Status = JourneyStatus.Completed.ToString();
+            journey.CompletedAt ??= DateTime.UtcNow;
+            journey.UpdatedAt = DateTime.UtcNow;
+            await _journeyRepository.UpdateAsync(journey, cancellationToken);
+        }
+
+        return new CompleteJourneyResponse
+        {
+            JourneyId = journey.Id,
+            CompletedAt = journey.CompletedAt!.Value
         };
     }
 
