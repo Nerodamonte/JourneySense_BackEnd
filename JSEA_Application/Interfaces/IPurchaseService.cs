@@ -7,4 +7,9 @@ public interface IPurchaseService
 {
     Task<PurchasePackageResponse> CreatePurchaseAsync(PurchasePackageRequest request, CancellationToken cancellationToken = default);
     Task<ConfirmPaymentResponse> ConfirmPaymentAsync(long orderCode, CancellationToken cancellationToken = default);
+
+    Task<RedeemPackageByPointsResponse> RedeemPackageByPointsAsync(
+        Guid userId,
+        RedeemPackageByPointsRequest request,
+        CancellationToken cancellationToken = default);
 }

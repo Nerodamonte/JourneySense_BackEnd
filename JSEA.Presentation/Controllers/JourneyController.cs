@@ -49,14 +49,25 @@ public class JourneyController : ControllerBase
     }
 
     [HttpGet("shared/{shareCode}")]
-    [ProducesResponseType(typeof(PublicSharedJourneyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PublicSharedJourneyDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetSharedJourney(string shareCode, CancellationToken cancellationToken)
     {
-        var result = await _journeyShareService.GetPublicByShareCodeAsync(shareCode, cancellationToken);
+        var result = await _journeyShareService.GetPublicDetailByShareCodeAsync(shareCode, cancellationToken);
         if (result == null)
             return NotFound(new { message = "Không tìm thấy link chia sẻ." });
         return Ok(result);
+    }
+
+    [HttpGet("shared")]
+    [ProducesResponseType(typeof(List<PublicSharedJourneyListItemResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPublicSharedJourneys(
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
+    {
+        var list = await _journeyShareService.GetPublicSharedJourneysAsync(page, pageSize, cancellationToken);
+        return Ok(list);
     }
 
     [HttpGet("{id:guid}")]

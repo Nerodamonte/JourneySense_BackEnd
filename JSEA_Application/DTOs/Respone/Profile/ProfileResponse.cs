@@ -21,6 +21,7 @@ namespace JSEA_Application.DTOs.Respone.Profile
 
         public List<VibeType> TravelStyle { get; set; } = new();
 
-        public int RewardPoints { get; set; }
+        public int Point { get; set; }
+
     }
 }
