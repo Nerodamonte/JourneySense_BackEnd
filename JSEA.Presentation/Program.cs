@@ -105,6 +105,7 @@ builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
 builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
 builder.Services.AddScoped<IRewardService, JSEA_Application.Services.Experience.RewardService>();
 builder.Services.AddScoped<IRateFeedbackService, JSEA_Application.Services.Experience.RateFeedbackService>();
+builder.Services.AddScoped<IVibeQuizService, JSEA_Application.Services.Quiz.VibeQuizService>();
 
 // PayOS
 builder.Services.Configure<PayOSOptions>(builder.Configuration.GetSection("PayOS"));

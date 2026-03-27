@@ -25,4 +25,10 @@ public interface IJourneyProgressService
         Guid travelerId,
         WaypointCheckOutRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<WaypointSkipResponse?> SkipWaypointAsync(
+        Guid journeyId,
+        Guid waypointId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default);
 }
