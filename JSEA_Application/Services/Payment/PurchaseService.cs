@@ -13,17 +13,20 @@ public class PurchaseService : IPurchaseService
     private readonly ITransactionRepository _transactionRepository;
     private readonly IUserPackageRepository _userPackageRepository;
     private readonly IPayOSPaymentService _payOSPaymentService;
+    private readonly IRewardService _rewardService;
 
     public PurchaseService(
         IPackageRepository packageRepository,
         ITransactionRepository transactionRepository,
         IUserPackageRepository userPackageRepository,
-        IPayOSPaymentService payOSPaymentService)
+        IPayOSPaymentService payOSPaymentService,
+        IRewardService rewardService)
     {
         _packageRepository = packageRepository;
         _transactionRepository = transactionRepository;
         _userPackageRepository = userPackageRepository;
         _payOSPaymentService = payOSPaymentService;
+        _rewardService = rewardService;
     }
 
     public async Task<PurchasePackageResponse> CreatePurchaseAsync(
@@ -33,7 +36,7 @@ public class PurchaseService : IPurchaseService
         if (package == null || package.IsActive != true)
             throw new ArgumentException("Gói không tồn tại hoặc đã ngừng hoạt động.");
 
-        var amount = (long)(package.SalePrice ?? package.Price);
+        var amount = (long)package.Price;
         var nowUtc = DateTime.UtcNow;
         var orderCode = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -46,7 +49,7 @@ public class PurchaseService : IPurchaseService
             packageId = package.Id,
             title = package.Title,
             price = package.Price,
-            salePrice = package.SalePrice,
+            salePrice = (decimal?)null,
             type = package.Type,
             distanceLimitKm = package.DistanceLimitKm,
             durationInDays = package.DurationInDays
@@ -159,11 +162,55 @@ public class PurchaseService : IPurchaseService
     private async Task<UserPackageModel> ActivatePackageAsync(
         Transaction transaction, CancellationToken cancellationToken)
     {
+        return await ActivatePackageCoreAsync(
+            transaction.UserId,
+            transaction.PackageId,
+            transaction.Package,
+            cancellationToken);
+    }
+
+    public async Task<RedeemPackageByPointsResponse> RedeemPackageByPointsAsync(
+        Guid userId,
+        RedeemPackageByPointsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var package = await _packageRepository.GetByIdAsync(request.PackageId, cancellationToken);
+        if (package == null || package.IsActive != true)
+            throw new ArgumentException("Gói không tồn tại hoặc đã ngừng hoạt động.");
+
+        var requiredPoints = package.PointsRequired;
+        if (!requiredPoints.HasValue || requiredPoints.Value <= 0)
+            throw new ArgumentException("Gói này không hỗ trợ đổi bằng điểm.");
+
+        await _rewardService.SubtractRewardPointsAsync(
+            userId,
+            requiredPoints.Value,
+            "redeem_package",
+            cancellationToken,
+            refId: package.Id,
+            refType: "package");
+
+        var up = await ActivatePackageCoreAsync(userId, package.Id, package, cancellationToken);
+        var remaining = await _rewardService.GetRewardPointsAsync(userId, cancellationToken);
+
+        return new RedeemPackageByPointsResponse
+        {
+            UserPackageId = up.Id,
+            ExpiresAt = up.ExpiresAt,
+            RemainingRewardPoints = remaining
+        };
+    }
+
+    private async Task<UserPackageModel> ActivatePackageCoreAsync(
+        Guid userId,
+        Guid packageId,
+        JSEA_Application.Models.Package package,
+        CancellationToken cancellationToken)
+    {
         var nowUtc = DateTime.UtcNow;
-        var package = transaction.Package;
 
         var currentPackage = await _userPackageRepository.GetCurrentByUserIdAsync(
-            transaction.UserId, nowUtc, cancellationToken);
+            userId, nowUtc, cancellationToken);
 
         int bonusDays = 0;
         if (currentPackage != null && currentPackage.ExpiresAt.HasValue)
@@ -173,18 +220,19 @@ public class PurchaseService : IPurchaseService
         }
 
         if (currentPackage != null)
-            await _userPackageRepository.DeactivateCurrentAsync(
-                transaction.UserId, nowUtc, cancellationToken);
+            await _userPackageRepository.DeactivateCurrentAsync(userId, nowUtc, cancellationToken);
 
         var newUserPackage = new UserPackageModel
         {
-            UserId = transaction.UserId,
-            PackageId = transaction.PackageId,
+            UserId = userId,
+            PackageId = packageId,
             DistanceLimitKm = package.DistanceLimitKm,
             UsedKm = 0,
             IsActive = true,
             ActivatedAt = nowUtc,
-            ExpiresAt = nowUtc.AddDays(package.DurationInDays + bonusDays)
+            ExpiresAt = package.DurationInDays <= 0
+                ? null
+                : nowUtc.AddDays(package.DurationInDays + bonusDays)
         };
 
         return await _userPackageRepository.CreateAsync(newUserPackage, cancellationToken);

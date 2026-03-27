@@ -7,6 +7,11 @@ public interface IJourneyProgressService
 {
     Task<StartJourneyResponse?> StartJourneyAsync(Guid journeyId, Guid travelerId, CancellationToken cancellationToken = default);
 
+    Task<CompleteJourneyResponse?> CompleteJourneyAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default);
+
     Task<WaypointCheckInResponse?> CheckInAsync(
         Guid journeyId,
         Guid waypointId,
@@ -19,5 +24,11 @@ public interface IJourneyProgressService
         Guid waypointId,
         Guid travelerId,
         WaypointCheckOutRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<WaypointSkipResponse?> SkipWaypointAsync(
+        Guid journeyId,
+        Guid waypointId,
+        Guid travelerId,
         CancellationToken cancellationToken = default);
 }

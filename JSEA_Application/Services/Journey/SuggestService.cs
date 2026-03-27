@@ -1,6 +1,7 @@
 ﻿using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
+using JSEA_Application.Enums;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.Collections.Generic;
@@ -25,6 +26,15 @@ namespace JSEA_Application.Services.Journey
 
         private const string GeminiEmbedModel = "gemini-embedding-001";
         private const string GeminiGenerateModel = "gemini-2.5-flash";
+
+        // Mood tuning: keep profile dominant, mood nudges ranking.
+        private const decimal MoodBoostHappy = 1.15m;
+        private const decimal MoodBoostSad = 1.20m;
+        private const decimal MoodBoostStressed = 1.25m;
+
+        // Diversity guard: ensure at least this many mood-aligned suggestions (if available).
+        private const int MinMoodAlignedDefault = 3;
+        private const int MinMoodAlignedStressed = 4;
 
         public SuggestService(
             IJourneyRepository journeyRepository,
@@ -155,7 +165,9 @@ namespace JSEA_Application.Services.Journey
             var activeEventBoosts = await _experienceRepository.GetActiveEventBoostsAsync(candidateIds, cancellationToken);
 
             var candidatesById = candidates.ToDictionary(e => e.Id, e => e);
-            var scored = new List<(Models.Experience Exp, float Cosine, double Distance, decimal Final)>();
+            var mood = ParseMood(journey.CurrentMood);
+            var moodVibeTags = mood.HasValue ? MapMoodToVibeTags(mood.Value) : Array.Empty<string>();
+            var scored = new List<(Models.Experience Exp, float Cosine, double Distance, decimal Final, bool MoodAligned)>();
             var maxDetour = (double)journey.MaxDetourDistanceMeters;
 
             foreach (var (experienceId, cosineScore) in cosineResults)
@@ -177,24 +189,30 @@ namespace JSEA_Application.Services.Journey
                 var timeBoost = GetTimeBoost(exp, realtimeTimeOfDay);
                 var seasonBoost = GetSeasonBoost(exp, realtimeSeason);
                 var eventBoost = activeEventBoosts.TryGetValue(experienceId, out var eb) ? eb : 1.0m;
+
+                var moodAligned = moodVibeTags.Length > 0 && HasAnyTag(exp, moodVibeTags);
+                var moodBoost = moodAligned ? GetMoodBoost(mood) : 1.0m;
+
                 var finalSimilarity = (decimal)cosineScore
                     * (decimal)distanceScore
                     * (decimal)weatherBoost
                     * (decimal)timeBoost
                     * (decimal)seasonBoost
-                    * eventBoost;
+                    * eventBoost
+                    * moodBoost;
 
-                scored.Add((exp, cosineScore, distanceMeters, finalSimilarity));
+                scored.Add((exp, cosineScore, distanceMeters, finalSimilarity, moodAligned));
             }
 
-            var sorted = scored
+            var sortedAll = scored
                 .OrderByDescending(x => x.Final)
-                .Take(10)
                 .ToList();
+
+            var sorted = TakeTopWithMoodDiversity(sortedAll, mood);
 
             // STEP 7: INSERT journey_suggestions (batch) + build response
             var suggestionsToSave = new List<JourneySuggestion>(sorted.Count);
-            foreach (var (exp, cosine, distance, final) in sorted)
+            foreach (var (exp, cosine, distance, final, _) in sorted)
             {
                 suggestionsToSave.Add(new JourneySuggestion
                 {
@@ -216,7 +234,7 @@ namespace JSEA_Application.Services.Journey
 
             var suggestionsByExpId = suggestionsToSave.ToDictionary(s => s.ExperienceId, s => s);
             var results = new List<SuggestionResponse>(sorted.Count);
-            foreach (var (exp, _, _, final) in sorted)
+            foreach (var (exp, _, _, final, _) in sorted)
             {
                 if (!suggestionsByExpId.TryGetValue(exp.Id, out var s))
                     continue;
@@ -307,6 +325,8 @@ namespace JSEA_Application.Services.Journey
             var insight = await GenerateTextAsync(prompt, cancellationToken);
             if (string.IsNullOrEmpty(insight)) return null;
 
+            insight = NormalizeInsightText(insight);
+
             await _journeyRepository.UpdateSuggestionInsightAsync(suggestionId, insight, cancellationToken);
 
             return insight;
@@ -393,11 +413,106 @@ $"https://generativelanguage.googleapis.com/v1beta/models/{GeminiEmbedModel}:emb
             var parts = new List<string>();
             if (!string.IsNullOrEmpty(travelStyleText))
                 parts.Add(travelStyleText);
-            if (!string.IsNullOrEmpty(journey.CurrentMood))
-                parts.Add($"Tam trang hien tai: {journey.CurrentMood}");
+            // IMPORTANT: Do not embed MoodType (Happy/Sad/Stressed...) directly.
+            // Mood is handled as a rule-based boost on top of cosine similarity to preserve profile dominance
+            // and align with vibe tags (Chill/Relax/Explorer/Foodie/...).
             if (!string.IsNullOrEmpty(journey.VehicleType))
                 parts.Add($"Phuong tien: {journey.VehicleType}");
             return string.Join(". ", parts);
+        }
+
+        private static MoodType? ParseMood(string? currentMood)
+        {
+            if (string.IsNullOrWhiteSpace(currentMood))
+                return null;
+
+            if (!Enum.TryParse<MoodType>(currentMood, ignoreCase: true, out var m))
+                return null;
+
+            // Treat Normal as baseline (no mood boost / no mood quota).
+            return m == MoodType.Normal ? null : m;
+        }
+
+        private static decimal GetMoodBoost(MoodType? mood)
+        {
+            return mood switch
+            {
+                MoodType.Happy => MoodBoostHappy,
+                MoodType.Sad => MoodBoostSad,
+                MoodType.Stressed => MoodBoostStressed,
+                _ => 1.0m
+            };
+        }
+
+        private static string[] MapMoodToVibeTags(MoodType mood)
+        {
+            // Map real-time MoodType to vibe tokens that exist in Experience.Tags.
+            return mood switch
+            {
+                MoodType.Stressed => new[] { "Relax", "Chill" },
+                MoodType.Sad => new[] { "Chill", "Relax", "LocalVibes" },
+                MoodType.Happy => new[] { "Adventure", "Explorer", "Foodie" },
+                // Normal means no extra vibe push.
+                MoodType.Normal => Array.Empty<string>(),
+                _ => Array.Empty<string>()
+            };
+        }
+
+        private static bool HasAnyTag(Models.Experience exp, IEnumerable<string> required)
+        {
+            if (exp.Tags == null || exp.Tags.Count == 0)
+                return false;
+
+            var set = new HashSet<string>(exp.Tags.Where(t => !string.IsNullOrWhiteSpace(t)), StringComparer.OrdinalIgnoreCase);
+            foreach (var r in required)
+            {
+                if (set.Contains(r))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static List<(Models.Experience Exp, float Cosine, double Distance, decimal Final, bool MoodAligned)> TakeTopWithMoodDiversity(
+            List<(Models.Experience Exp, float Cosine, double Distance, decimal Final, bool MoodAligned)> sortedAll,
+            MoodType? mood)
+        {
+            var top = sortedAll.Take(10).ToList();
+
+            if (!mood.HasValue)
+                return top;
+
+            var minAligned = mood.Value == MoodType.Stressed ? MinMoodAlignedStressed : MinMoodAlignedDefault;
+            var alignedCount = top.Count(x => x.MoodAligned);
+            if (alignedCount >= minAligned)
+                return top;
+
+            // Pull best mood-aligned items (if any) and swap out lowest non-aligned items.
+            foreach (var candidate in sortedAll.Where(x => x.MoodAligned))
+            {
+                if (top.Any(x => x.Exp.Id == candidate.Exp.Id))
+                    continue;
+
+                top.Add(candidate);
+
+                // Remove one lowest-scoring non-aligned item to keep size <= 10.
+                var remove = top
+                    .Where(x => !x.MoodAligned)
+                    .OrderBy(x => x.Final)
+                    .FirstOrDefault();
+
+                if (remove.Exp != null && top.Count > 10)
+                    top.Remove(remove);
+
+                alignedCount = top.Count(x => x.MoodAligned);
+                if (alignedCount >= minAligned && top.Count == 10)
+                    break;
+            }
+
+            return top
+                .OrderByDescending(x => x.Final)
+                .Take(10)
+                .ToList();
         }
 
         private static string BuildRagPrompt(
@@ -416,56 +531,146 @@ $"https://generativelanguage.googleapis.com/v1beta/models/{GeminiEmbedModel}:emb
         {
             var sb = new StringBuilder();
 
-            // === DU LIEU DAU VAO ===
-            sb.AppendLine("=== THONG TIN DIA DIEM ===");
-            sb.AppendLine($"Ten: {expName}");
+            static string MapMoodToVietnamese(string? mood) => (mood ?? "").Trim().ToLowerInvariant() switch
+            {
+                "happy" => "đang vui / có năng lượng",
+                "normal" => "tâm trạng bình thường",
+                "sad" => "đang hơi buồn",
+                "stressed" => "đang căng thẳng",
+                _ => string.IsNullOrWhiteSpace(mood) ? "" : mood.Trim()
+            };
+
+            static string MapTimeOfDayToVietnamese(string t) => (t ?? "").Trim() switch
+            {
+                "Morning" => "buổi sáng",
+                "Afternoon" => "buổi chiều",
+                "Evening" => "buổi tối",
+                "Night" => "ban đêm",
+                _ => string.IsNullOrWhiteSpace(t) ? "" : t
+            };
+
+            static string MapSeasonToVietnamese(string s) => (s ?? "").Trim() switch
+            {
+                "Spring" => "mùa xuân",
+                "Summer" => "mùa hè",
+                "Autumn" => "mùa thu",
+                "Winter" => "mùa đông",
+                _ => string.IsNullOrWhiteSpace(s) ? "" : s
+            };
+
+            static string MapWeatherToVietnamese(string? w) => (w ?? "").Trim().ToLowerInvariant() switch
+            {
+                "sunny" => "trời nắng",
+                "clear" => "trời quang",
+                "cloudy" => "trời nhiều mây",
+                "overcast" => "trời âm u",
+                "rainy" => "trời mưa",
+                "storm" or "stormy" => "trời giông",
+                "drizzle" => "mưa lất phất",
+                "fog" or "foggy" => "trời có sương",
+                _ => string.IsNullOrWhiteSpace(w) ? "" : w.Trim()
+            };
+
+            static string MapCrowdLevelToVietnamese(string? c) => (c ?? "").Trim().ToLowerInvariant() switch
+            {
+                "quiet" => "địa điểm này khá vắng khách",
+                "normal" => "địa điểm này không đông khách lắm",
+                "busy" => "địa điểm này khá đông khách",
+                "vắng" => "địa điểm này khá vắng khách",
+                "đông" => "địa điểm này khá đông khách",
+                _ => string.IsNullOrWhiteSpace(c) ? "" : c.Trim()
+            };
+
+            var moodVi = MapMoodToVietnamese(currentMood);
+            var timeOfDayVi = MapTimeOfDayToVietnamese(timeOfDay);
+            var seasonVi = MapSeasonToVietnamese(season);
+            var weatherVi = MapWeatherToVietnamese(weather);
+            var crowdLevelVi = MapCrowdLevelToVietnamese(crowdLevel);
+
+            // === DỮ LIỆU ĐẦU VÀO (FACTS) ===
+            sb.AppendLine("=== THÔNG TIN ĐỊA ĐIỂM (FACTS) ===");
+            sb.AppendLine($"Tên: {expName}");
             if (!string.IsNullOrEmpty(richDescription))
-                sb.AppendLine($"Mo ta: {richDescription}");
+                sb.AppendLine($"Mô tả: {richDescription}");
             if (!string.IsNullOrEmpty(priceRange))
-                sb.AppendLine($"Gia: {priceRange}");
-            if (!string.IsNullOrEmpty(crowdLevel))
-                sb.AppendLine($"Muc do dong duc: {crowdLevel}");
+                sb.AppendLine($"Giá: {priceRange}");
+            if (!string.IsNullOrEmpty(crowdLevelVi))
+                sb.AppendLine($"Tình trạng khách: {crowdLevelVi}");
             sb.AppendLine();
-            sb.AppendLine("=== BOI CANH NGUOI DUNG ===");
+            sb.AppendLine("=== BỐI CẢNH NGƯỜI DÙNG (FACTS) ===");
             if (!string.IsNullOrEmpty(travelStyleList))
-                sb.AppendLine($"Cac vibe du lich cu the cua nguoi dung (liet ke day du): {travelStyleList}");
+                sb.AppendLine($"Vibe du lịch (liệt kê): {travelStyleList}");
             if (!string.IsNullOrEmpty(travelStyleText))
-                sb.AppendLine($"Mo ta phong cach du lich: {travelStyleText}");
-            if (!string.IsNullOrEmpty(currentMood))
-                sb.AppendLine($"Tam trang: {currentMood}");
+                sb.AppendLine($"Mô tả phong cách: {travelStyleText}");
+            if (!string.IsNullOrEmpty(moodVi))
+                sb.AppendLine($"Tâm trạng hiện tại: {moodVi}");
             if (!string.IsNullOrEmpty(vehicleType))
-                sb.AppendLine($"Phuong tien: {vehicleType}");
+                sb.AppendLine($"Phương tiện: {vehicleType}");
             if (detourDistanceMeters.HasValue)
             {
                 var detourM = detourDistanceMeters.Value;
                 string detourNote;
                 if (detourM <= 300)
-                    detourNote = $"Do lech khoi tuyen chinh: {detourM}m — rat gan, gan nhu khong can di lech, rat dang ghe";
+                    detourNote = $"Độ lệch khỏi tuyến chính: {detourM}m — rất gần";
                 else if (detourM <= 800)
-                    detourNote = $"Do lech khoi tuyen chinh: {detourM}m — lech nhe, di them vai phut la toi, kha thuan tien";
+                    detourNote = $"Độ lệch khỏi tuyến chính: {detourM}m — lệch nhẹ, khá thuận tiện";
                 else if (detourM <= 2000)
-                    detourNote = $"Do lech khoi tuyen chinh: {detourM}m — lech khoang 1-2km, can can nhac neu khong co nhieu thoi gian";
+                    detourNote = $"Độ lệch khỏi tuyến chính: {detourM}m — khoảng 1–2km, nên cân nhắc thời gian";
                 else
-                    detourNote = $"Do lech khoi tuyen chinh: {detourM}m — lech kha xa so voi tuyen, nen can nhac ky truoc khi quyet dinh ghe, chi nen di neu dia diem nay that su phu hop voi ban";
+                    detourNote = $"Độ lệch khỏi tuyến chính: {detourM}m — lệch khá xa, chỉ nên ghé nếu thật sự hợp";
                 sb.AppendLine(detourNote);
             }
-            if (!string.IsNullOrEmpty(weather))
-                sb.AppendLine($"Thoi tiet: {weather}");
-            sb.AppendLine($"Thoi diem trong ngay: {timeOfDay}");
-            sb.AppendLine($"Mua hien tai: {season}");
+            if (!string.IsNullOrEmpty(weatherVi))
+                sb.AppendLine($"Thời tiết: {weatherVi}");
+            if (!string.IsNullOrEmpty(timeOfDayVi))
+                sb.AppendLine($"Thời điểm trong ngày: {timeOfDayVi}");
+            if (!string.IsNullOrEmpty(seasonVi))
+                sb.AppendLine($"Mùa: {seasonVi}");
             sb.AppendLine();
 
             // === INSTRUCTION CHAT CHE ===
-            sb.AppendLine("=== NHIEM VU ===");
-            sb.AppendLine("Viet mot doan van 2-3 cau tieng Viet co dau, tu nhien nhu nguoi ban noi chuyen.");
-            sb.AppendLine("Doan van BUOC PHAI de cap day du TAT CA cac yeu to sau (theo dung thu tu nay):");
-            sb.AppendLine("1. Phong cach du lich va tam trang cua nguoi dung co phu hop voi dia diem nay nhu the nao");
-            sb.AppendLine("2. Thoi tiet va thoi diem trong ngay co thuan loi de ghe khong");
-            sb.AppendLine("3. Gia ca va muc do dong duc co phu hop voi nguoi dung khong");
-            sb.AppendLine("4. Do lech so voi tuyen di — neu ro la chi can lech [so met] la toi duoc, gan hay xa, co dang ghé khong");
-            sb.AppendLine("Khong duoc bo qua bat ky yeu to nao trong 4 yeu to tren.");
-            sb.AppendLine("TUYET DOI KHONG in ra so thu tu, bullet point, tag, hay bat ky chu giai nao. Chi co doan van thuan tuy.");
+            sb.AppendLine("=== NHIỆM VỤ ===");
+            sb.AppendLine("Bạn là một người bạn đang đưa lời khuyên. Viết 2–3 câu tiếng Việt tự nhiên, thân thiện (xưng hô 'bạn').");
+            sb.AppendLine("BẮT BUỘC nhắc đủ 4 ý sau theo đúng thứ tự, nhưng viết liền mạch (không xuống dòng, không đánh số, không bullet):");
+            sb.AppendLine("(1) Liên hệ phong cách du lịch + tâm trạng hiện tại với địa điểm này (đừng phán quá đà).");
+            sb.AppendLine("(2) Nói ngắn về thời tiết + thời điểm trong ngày có thuận để ghé không.");
+            sb.AppendLine("(3) Nhắc giá + tình trạng đông đúc (nếu có). Khi nhắc đông đúc, phải viết theo dạng 'địa điểm này ...' hoặc 'quán này ...' (không dùng cụm 'mức độ ...'). Giữ nguyên con số/đơn vị đúng như FACTS.");
+            sb.AppendLine("(4) Nhắc độ lệch tuyến: phải có đúng số mét nếu có (ví dụ 'lệch 61m'), rồi kết lại bằng một lời khuyên nhẹ nhàng.");
+            sb.AppendLine("CHỈ dùng thông tin trong FACTS, không bịa thêm chi tiết (không tự suy đoán 'chiều mây', 'nắng mưa'...).");
+            sb.AppendLine("TUYỆT ĐỐI không dùng các từ mã như quiet/normal/busy; không dùng cụm 'mức độ ...'.");
             return sb.ToString();
+        }
+
+        private static string NormalizeInsightText(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+                return string.Empty;
+
+            var text = raw.Trim();
+
+            // Remove markdown fences if the model returns them.
+            if (text.StartsWith("```", StringComparison.Ordinal))
+            {
+                var firstNewline = text.IndexOf('\n');
+                if (firstNewline >= 0)
+                    text = text[(firstNewline + 1)..];
+
+                var lastFence = text.LastIndexOf("```", StringComparison.Ordinal);
+                if (lastFence >= 0)
+                    text = text[..lastFence];
+
+                text = text.Trim();
+            }
+
+            // Collapse excessive whitespace.
+            text = string.Join(' ', text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+
+            // Guardrail: if the model still outputs 'mức độ ...', rewrite to natural subject phrasing.
+            text = text.Replace("mức độ không đông khách lắm", "địa điểm này không đông khách lắm", StringComparison.OrdinalIgnoreCase);
+            text = text.Replace("mức độ khá vắng khách", "địa điểm này khá vắng khách", StringComparison.OrdinalIgnoreCase);
+            text = text.Replace("mức độ khá đông khách", "địa điểm này khá đông khách", StringComparison.OrdinalIgnoreCase);
+
+            return text;
         }
 
         private async Task<string?> GetRealtimeWeatherStringAsync(Models.Journey? journey, CancellationToken cancellationToken)

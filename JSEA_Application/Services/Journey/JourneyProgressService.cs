@@ -3,26 +3,32 @@ using JSEA_Application.DTOs.Respone.JourneyProgress;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
+using System;
 
 namespace JSEA_Application.Services.Journey;
 
 public class JourneyProgressService : IJourneyProgressService
 {
+    private const int CompleteJourneyPoints = 5;
+
     private readonly IJourneyRepository _journeyRepository;
     private readonly IVisitRepository _visitRepository;
     private readonly IFeedbackRepository _feedbackRepository;
     private readonly IRatingRepository _ratingRepository;
+    private readonly IRewardService _rewardService;
 
     public JourneyProgressService(
         IJourneyRepository journeyRepository,
         IVisitRepository visitRepository,
         IFeedbackRepository feedbackRepository,
-        IRatingRepository ratingRepository)
+        IRatingRepository ratingRepository,
+        IRewardService rewardService)
     {
         _journeyRepository = journeyRepository;
         _visitRepository = visitRepository;
         _feedbackRepository = feedbackRepository;
         _ratingRepository = ratingRepository;
+        _rewardService = rewardService;
     }
 
     public async Task<StartJourneyResponse?> StartJourneyAsync(Guid journeyId, Guid travelerId, CancellationToken cancellationToken = default)
@@ -43,6 +49,55 @@ public class JourneyProgressService : IJourneyProgressService
         {
             JourneyId = journey.Id,
             StartedAt = journey.StartedAt!.Value
+        };
+    }
+
+    public async Task<CompleteJourneyResponse?> CompleteJourneyAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetBasicByIdAsync(journeyId, cancellationToken);
+        if (journey == null) return null;
+        if (journey.TravelerId != travelerId) return null;
+
+        // Defensive parsing: DB may store either enum string (Completed) or snake/lowercase (completed).
+        JourneyStatus? status = null;
+        if (!string.IsNullOrWhiteSpace(journey.Status) && Enum.TryParse<JourneyStatus>(journey.Status, ignoreCase: true, out var parsed))
+            status = parsed;
+
+        if (status == JourneyStatus.Cancelled || string.Equals(journey.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Hành trình đã bị hủy, không thể hoàn tất.");
+
+        if (!journey.StartedAt.HasValue)
+            throw new InvalidOperationException("Hành trình chưa bắt đầu, không thể hoàn tất.");
+
+        // Idempotent: only award points when transitioning to Completed.
+        var shouldAwardPoints = status != JourneyStatus.Completed || !journey.CompletedAt.HasValue;
+
+        // Idempotent: if already completed, return existing timestamp.
+        if (shouldAwardPoints)
+        {
+            journey.Status = JourneyStatus.Completed.ToString();
+            journey.CompletedAt ??= DateTime.UtcNow;
+            journey.UpdatedAt = DateTime.UtcNow;
+            await _journeyRepository.UpdateAsync(journey, cancellationToken);
+
+            await _rewardService.AddRewardPointsAsync(
+                travelerId,
+                CompleteJourneyPoints,
+                "complete_journey",
+                cancellationToken,
+                achievementId: null,
+                refId: journeyId,
+                refType: "journey");
+        }
+
+        return new CompleteJourneyResponse
+        {
+            JourneyId = journey.Id,
+            CompletedAt = journey.CompletedAt!.Value,
+            PointsEarned = shouldAwardPoints ? CompleteJourneyPoints : 0
         };
     }
 
@@ -199,6 +254,47 @@ public class JourneyProgressService : IJourneyProgressService
             WaypointId = waypointId,
             VisitId = visit.Id,
             RatingId = rating.Id,
+            ActualDepartureAt = waypoint.ActualDepartureAt,
+            ActualStopMinutes = waypoint.ActualStopMinutes
+        };
+    }
+
+    public async Task<WaypointSkipResponse?> SkipWaypointAsync(
+        Guid journeyId,
+        Guid waypointId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default)
+    {
+        var waypoint = await _journeyRepository.GetWaypointForTravelerAsync(journeyId, waypointId, travelerId, cancellationToken);
+        if (waypoint?.Journey == null) return null;
+
+        if (!waypoint.Journey.StartedAt.HasValue)
+            return null;
+
+        // Idempotent: if already completed (checked out or skipped), just return current state.
+        if (waypoint.ActualDepartureAt.HasValue)
+        {
+            return new WaypointSkipResponse
+            {
+                JourneyId = journeyId,
+                WaypointId = waypointId,
+                ActualArrivalAt = waypoint.ActualArrivalAt,
+                ActualDepartureAt = waypoint.ActualDepartureAt,
+                ActualStopMinutes = waypoint.ActualStopMinutes
+            };
+        }
+
+        waypoint.ActualArrivalAt ??= DateTime.UtcNow;
+        waypoint.ActualDepartureAt = DateTime.UtcNow;
+        waypoint.ActualStopMinutes = 0;
+
+        await _journeyRepository.UpdateWaypointAsync(waypoint, cancellationToken);
+
+        return new WaypointSkipResponse
+        {
+            JourneyId = journeyId,
+            WaypointId = waypointId,
+            ActualArrivalAt = waypoint.ActualArrivalAt,
             ActualDepartureAt = waypoint.ActualDepartureAt,
             ActualStopMinutes = waypoint.ActualStopMinutes
         };

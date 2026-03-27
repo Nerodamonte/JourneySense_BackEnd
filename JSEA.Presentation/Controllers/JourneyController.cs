@@ -3,6 +3,7 @@ using JSEA_Application.DTOs.Request.JourneyProgress;
 using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.DTOs.Respone.JourneyProgress;
 using JSEA_Application.Interfaces;
+using JSEA_Application.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -48,14 +49,25 @@ public class JourneyController : ControllerBase
     }
 
     [HttpGet("shared/{shareCode}")]
-    [ProducesResponseType(typeof(PublicSharedJourneyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PublicSharedJourneyDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetSharedJourney(string shareCode, CancellationToken cancellationToken)
     {
-        var result = await _journeyShareService.GetPublicByShareCodeAsync(shareCode, cancellationToken);
+        var result = await _journeyShareService.GetPublicDetailByShareCodeAsync(shareCode, cancellationToken);
         if (result == null)
             return NotFound(new { message = "Không tìm thấy link chia sẻ." });
         return Ok(result);
+    }
+
+    [HttpGet("shared")]
+    [ProducesResponseType(typeof(List<PublicSharedJourneyListItemResponse>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetPublicSharedJourneys(
+        CancellationToken cancellationToken,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10)
+    {
+        var list = await _journeyShareService.GetPublicSharedJourneysAsync(page, pageSize, cancellationToken);
+        return Ok(list);
     }
 
     [HttpGet("{id:guid}")]
@@ -245,6 +257,40 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
+    /// Cập nhật mood trong giai đoạn planning (trước khi lưu waypoints).
+    /// Khi đổi mood, backend sẽ xóa cache suggestions để lần gọi suggest kế tiếp regenerate theo mood mới.
+    /// </summary>
+    [HttpPut("{journeyId:guid}/mood")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateMood(
+        Guid journeyId,
+        [FromBody] UpdateJourneyMoodRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var ok = await _journeyService.UpdateCurrentMoodAsync(
+            journeyId,
+            travelerId,
+            request.CurrentMood,
+            cancellationToken);
+
+        if (!ok)
+            return BadRequest(new { message = "Không thể cập nhật mood (chỉ cho phép khi đang planning và chưa lưu waypoints)." });
+
+        return Ok(new { message = "Đã cập nhật mood.", currentMood = request.CurrentMood });
+    }
+
+    /// <summary>
     /// Bắt đầu hành trình (FE bấm "Start journey"). Set StartedAt và chuyển status sang InProgress. (Authorized)
     /// </summary>
     [HttpPost("{journeyId:guid}/start")]
@@ -263,6 +309,35 @@ public class JourneyController : ControllerBase
             return NotFound(new { message = "Không tìm thấy hành trình." });
 
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Hoàn tất hành trình (FE bấm "Complete journey"). Set CompletedAt và chuyển status sang Completed. (Authorized)
+    /// </summary>
+    [HttpPost("{journeyId:guid}/complete")]
+    [Authorize]
+    [ProducesResponseType(typeof(CompleteJourneyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CompleteJourney(Guid journeyId, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        try
+        {
+            var result = await _journeyProgressService.CompleteJourneyAsync(journeyId, travelerId, cancellationToken);
+            if (result == null)
+                return NotFound(new { message = "Không tìm thấy hành trình." });
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -321,6 +396,65 @@ public class JourneyController : ControllerBase
             return BadRequest(new { message = "Không thể check-out (rating/dữ liệu không hợp lệ hoặc hành trình/waypoint không tồn tại)." });
 
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Skip một waypoint (user bấm "Skip").
+    /// Backend sẽ đánh dấu waypoint là completed (ActualDepartureAt != null) để tuyến tiếp theo bỏ qua điểm này.
+    /// Trả về polyline mới từ vị trí hiện tại tới waypoint kế tiếp (hoặc destination nếu hết waypoint).
+    /// </summary>
+    [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/skip")]
+    [Authorize]
+    [ProducesResponseType(typeof(JourneyPolylineResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> SkipWaypoint(
+        Guid journeyId,
+        Guid waypointId,
+        CancellationToken cancellationToken,
+        [FromQuery] double latitude,
+        [FromQuery] double longitude)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180)
+            return BadRequest(new { message = "Tọa độ không hợp lệ." });
+
+        var skipped = await _journeyProgressService.SkipWaypointAsync(journeyId, waypointId, travelerId, cancellationToken);
+        if (skipped == null)
+            return NotFound(new { message = "Không tìm thấy waypoint hoặc hành trình chưa bắt đầu." });
+
+        try
+        {
+            var polyline = await _journeyService.GetNearestWaypointPolylineAsync(
+                journeyId,
+                travelerId,
+                latitude,
+                longitude,
+                excludeCompletedWaypoints: true,
+                cancellationToken);
+
+            if (polyline == null)
+                return StatusCode(502, new { message = "Không thể lấy polyline tiếp theo (kiểm tra API Goong Maps)." });
+
+            return Ok(polyline);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return NotFound(new { message = "Không tìm thấy hành trình." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
