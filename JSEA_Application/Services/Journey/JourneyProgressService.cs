@@ -258,4 +258,45 @@ public class JourneyProgressService : IJourneyProgressService
             ActualStopMinutes = waypoint.ActualStopMinutes
         };
     }
+
+    public async Task<WaypointSkipResponse?> SkipWaypointAsync(
+        Guid journeyId,
+        Guid waypointId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default)
+    {
+        var waypoint = await _journeyRepository.GetWaypointForTravelerAsync(journeyId, waypointId, travelerId, cancellationToken);
+        if (waypoint?.Journey == null) return null;
+
+        if (!waypoint.Journey.StartedAt.HasValue)
+            return null;
+
+        // Idempotent: if already completed (checked out or skipped), just return current state.
+        if (waypoint.ActualDepartureAt.HasValue)
+        {
+            return new WaypointSkipResponse
+            {
+                JourneyId = journeyId,
+                WaypointId = waypointId,
+                ActualArrivalAt = waypoint.ActualArrivalAt,
+                ActualDepartureAt = waypoint.ActualDepartureAt,
+                ActualStopMinutes = waypoint.ActualStopMinutes
+            };
+        }
+
+        waypoint.ActualArrivalAt ??= DateTime.UtcNow;
+        waypoint.ActualDepartureAt = DateTime.UtcNow;
+        waypoint.ActualStopMinutes = 0;
+
+        await _journeyRepository.UpdateWaypointAsync(waypoint, cancellationToken);
+
+        return new WaypointSkipResponse
+        {
+            JourneyId = journeyId,
+            WaypointId = waypointId,
+            ActualArrivalAt = waypoint.ActualArrivalAt,
+            ActualDepartureAt = waypoint.ActualDepartureAt,
+            ActualStopMinutes = waypoint.ActualStopMinutes
+        };
+    }
 }
