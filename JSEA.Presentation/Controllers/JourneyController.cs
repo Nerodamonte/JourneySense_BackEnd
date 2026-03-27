@@ -399,6 +399,65 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
+    /// Skip một waypoint (user bấm "Skip").
+    /// Backend sẽ đánh dấu waypoint là completed (ActualDepartureAt != null) để tuyến tiếp theo bỏ qua điểm này.
+    /// Trả về polyline mới từ vị trí hiện tại tới waypoint kế tiếp (hoặc destination nếu hết waypoint).
+    /// </summary>
+    [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/skip")]
+    [Authorize]
+    [ProducesResponseType(typeof(JourneyPolylineResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status502BadGateway)]
+    public async Task<IActionResult> SkipWaypoint(
+        Guid journeyId,
+        Guid waypointId,
+        CancellationToken cancellationToken,
+        [FromQuery] double latitude,
+        [FromQuery] double longitude)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180)
+            return BadRequest(new { message = "Tọa độ không hợp lệ." });
+
+        var skipped = await _journeyProgressService.SkipWaypointAsync(journeyId, waypointId, travelerId, cancellationToken);
+        if (skipped == null)
+            return NotFound(new { message = "Không tìm thấy waypoint hoặc hành trình chưa bắt đầu." });
+
+        try
+        {
+            var polyline = await _journeyService.GetNearestWaypointPolylineAsync(
+                journeyId,
+                travelerId,
+                latitude,
+                longitude,
+                excludeCompletedWaypoints: true,
+                cancellationToken);
+
+            if (polyline == null)
+                return StatusCode(502, new { message = "Không thể lấy polyline tiếp theo (kiểm tra API Goong Maps)." });
+
+            return Ok(polyline);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return NotFound(new { message = "Không tìm thấy hành trình." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Log interaction của user với suggestion (ViewedDetails/Saved/Accepted/Skipped...).
     /// </summary>
     [HttpPost("suggestions/{suggestionId:guid}/interactions")]
