@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using JSEA_Application.Enums;
 
 namespace JSEA_Application.DTOs.Request.Package;
 
@@ -11,17 +12,13 @@ public class CreatePackageDto
     [Range(0, double.MaxValue)]
     public decimal Price { get; set; }
 
-    [Range(0, double.MaxValue)]
-    public decimal? SalePrice { get; set; }
-
     [Required]
-    [StringLength(50)]
-    public string Type { get; set; } = null!;
+    public PackageType Type { get; set; }
 
     [Range(0, int.MaxValue)]
     public int DistanceLimitKm { get; set; }
 
-    [Range(1, int.MaxValue)]
+    [Range(0, int.MaxValue)]
     public int DurationInDays { get; set; }
 
     public string? Benefit { get; set; }
