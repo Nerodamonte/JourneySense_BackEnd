@@ -8,6 +8,7 @@ namespace JSEA_Application.Services.Journey;
 public class JourneyShareService : IJourneyShareService
 {
     public const string ShareAchievementCode = "SHARE_JOURNEY";
+    private const int ShareJourneyPoints = 10;
 
     private readonly IJourneyRepository _journeyRepository;
     private readonly ISharedJourneyRepository _sharedJourneyRepository;
@@ -63,19 +64,15 @@ public class JourneyShareService : IJourneyShareService
 
         await _sharedJourneyRepository.AddAsync(row, cancellationToken);
 
-        var achievement = await _achievementRepository.GetActiveByCodeAsync(ShareAchievementCode, cancellationToken);
-        var points = achievement?.Points ?? 0;
-        if (points > 0)
-        {
-            await _rewardService.AddRewardPointsAsync(
-                travelerId,
-                points,
-                "share_journey",
-                cancellationToken,
-                achievement?.Id,
-                journeyId,
-                "journey");
-        }
+        var points = ShareJourneyPoints;
+        await _rewardService.AddRewardPointsAsync(
+            travelerId,
+            points,
+            "share_journey",
+            cancellationToken,
+            achievementId: null,
+            refId: journeyId,
+            refType: "journey");
 
         return new ShareJourneyResponse
         {
