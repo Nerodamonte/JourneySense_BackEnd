@@ -34,6 +34,49 @@ public class SharedJourneyRepository : ISharedJourneyRepository
             .FirstOrDefaultAsync(s => s.ShareCode == shareCode && s.IsActive, cancellationToken);
     }
 
+    public async Task<List<SharedJourney>> GetPublicCompletedAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1) pageSize = 10;
+        if (pageSize > 50) pageSize = 50;
+
+        return await _context.SharedJourneys
+            .AsNoTracking()
+            .Where(s => s.IsActive
+                        && s.Journey != null
+                        && s.Journey.Status != null
+                        && EF.Functions.ILike(s.Journey.Status, "completed"))
+            .Include(s => s.Journey)
+                .ThenInclude(j => j.JourneyWaypoints)
+            .OrderByDescending(s => s.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<SharedJourney?> GetPublicDetailAsync(string shareCode, CancellationToken cancellationToken = default)
+    {
+        return await _context.SharedJourneys
+            .Include(s => s.Journey)
+                .ThenInclude(j => j.JourneyWaypoints)
+                    .ThenInclude(w => w.Experience)
+                        .ThenInclude(e => e.ExperienceDetail)
+            .Include(s => s.Journey)
+                .ThenInclude(j => j.JourneyWaypoints)
+                    .ThenInclude(w => w.Experience)
+                        .ThenInclude(e => e.ExperiencePhotos)
+            .FirstOrDefaultAsync(
+                s => s.ShareCode == shareCode
+                     && s.IsActive
+                     && s.Journey != null
+                     && s.Journey.Status != null
+                     && EF.Functions.ILike(s.Journey.Status, "completed"),
+                cancellationToken);
+    }
+
     public async Task<bool> ShareCodeExistsAsync(string shareCode, CancellationToken cancellationToken = default)
     {
         return await _context.SharedJourneys.AnyAsync(s => s.ShareCode == shareCode, cancellationToken);

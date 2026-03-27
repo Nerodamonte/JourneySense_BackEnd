@@ -1,6 +1,8 @@
 using JSEA_Application.DTOs.Request.Payment;
 using JSEA_Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace JSEA_Presentation.Controllers;
 
@@ -32,6 +34,37 @@ public class PaymentController : ControllerBase
             return Ok(result);
         }
         catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("redeem-by-points")]
+    [Authorize]
+    [ProducesResponseType(typeof(JSEA_Application.DTOs.Respone.Payment.RedeemPackageByPointsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> RedeemPackageByPoints(
+        [FromBody] RedeemPackageByPointsRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        try
+        {
+            var result = await _purchaseService.RedeemPackageByPointsAsync(userId, request, cancellationToken);
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
         }

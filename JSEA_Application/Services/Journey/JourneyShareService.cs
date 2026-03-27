@@ -8,22 +8,35 @@ namespace JSEA_Application.Services.Journey;
 public class JourneyShareService : IJourneyShareService
 {
     public const string ShareAchievementCode = "SHARE_JOURNEY";
+    private const int ShareJourneyPoints = 10;
 
     private readonly IJourneyRepository _journeyRepository;
     private readonly ISharedJourneyRepository _sharedJourneyRepository;
     private readonly IAchievementRepository _achievementRepository;
     private readonly IRewardService _rewardService;
+    private readonly IUserProfileRepository _userProfileRepository;
+    private readonly IVisitRepository _visitRepository;
+    private readonly IFeedbackRepository _feedbackRepository;
+    private readonly IRatingRepository _ratingRepository;
 
     public JourneyShareService(
         IJourneyRepository journeyRepository,
         ISharedJourneyRepository sharedJourneyRepository,
         IAchievementRepository achievementRepository,
-        IRewardService rewardService)
+        IRewardService rewardService,
+        IUserProfileRepository userProfileRepository,
+        IVisitRepository visitRepository,
+        IFeedbackRepository feedbackRepository,
+        IRatingRepository ratingRepository)
     {
         _journeyRepository = journeyRepository;
         _sharedJourneyRepository = sharedJourneyRepository;
         _achievementRepository = achievementRepository;
         _rewardService = rewardService;
+        _userProfileRepository = userProfileRepository;
+        _visitRepository = visitRepository;
+        _feedbackRepository = feedbackRepository;
+        _ratingRepository = ratingRepository;
     }
 
     public async Task<ShareJourneyResponse?> ShareJourneyAsync(
@@ -63,19 +76,15 @@ public class JourneyShareService : IJourneyShareService
 
         await _sharedJourneyRepository.AddAsync(row, cancellationToken);
 
-        var achievement = await _achievementRepository.GetActiveByCodeAsync(ShareAchievementCode, cancellationToken);
-        var points = achievement?.Points ?? 0;
-        if (points > 0)
-        {
-            await _rewardService.AddRewardPointsAsync(
-                travelerId,
-                points,
-                "share_journey",
-                cancellationToken,
-                achievement?.Id,
-                journeyId,
-                "journey");
-        }
+        var points = ShareJourneyPoints;
+        await _rewardService.AddRewardPointsAsync(
+            travelerId,
+            points,
+            "share_journey",
+            cancellationToken,
+            achievementId: null,
+            refId: journeyId,
+            refType: "journey");
 
         return new ShareJourneyResponse
         {
@@ -111,6 +120,121 @@ public class JourneyShareService : IJourneyShareService
             VehicleType = Enum.TryParse<VehicleType>(j.VehicleType, true, out var vt) ? vt : null,
             Status = Enum.TryParse<JourneyStatus>(j.Status, true, out var js) ? js : null,
             WaypointCount = j.JourneyWaypoints?.Count
+        };
+    }
+
+    public async Task<List<PublicSharedJourneyListItemResponse>> GetPublicSharedJourneysAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var rows = await _sharedJourneyRepository.GetPublicCompletedAsync(page, pageSize, cancellationToken);
+
+        var userIds = rows.Select(r => r.UserId).Distinct().ToList();
+        var profiles = new Dictionary<Guid, UserProfile>();
+        foreach (var uid in userIds)
+        {
+            var p = await _userProfileRepository.GetByUserIdAsync(uid, cancellationToken);
+            if (p != null)
+                profiles[uid] = p;
+        }
+
+        return rows
+            .Where(r => r.Journey != null)
+            .Select(r =>
+            {
+                profiles.TryGetValue(r.UserId, out var p);
+                var j = r.Journey;
+                return new PublicSharedJourneyListItemResponse
+                {
+                    ShareCode = r.ShareCode,
+                    JourneyId = j.Id,
+                    TravelerName = p?.FullName,
+                    TravelerAvatarUrl = p?.AvatarUrl,
+                    OriginAddress = j.OriginAddress,
+                    DestinationAddress = j.DestinationAddress,
+                    VehicleType = Enum.TryParse<VehicleType>(j.VehicleType, true, out var vt) ? vt : null,
+                    CompletedAt = j.CompletedAt,
+                    ViewCount = r.ViewCount,
+                    WaypointCount = j.JourneyWaypoints?.Count ?? 0
+                };
+            })
+            .ToList();
+    }
+
+    public async Task<PublicSharedJourneyDetailResponse?> GetPublicDetailByShareCodeAsync(
+        string shareCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shareCode))
+            return null;
+
+        var normalized = shareCode.Trim();
+        var row = await _sharedJourneyRepository.GetPublicDetailAsync(normalized, cancellationToken);
+        if (row?.Journey == null)
+            return null;
+
+        row.ViewCount++;
+        await _sharedJourneyRepository.UpdateAsync(row, cancellationToken);
+
+        var profile = await _userProfileRepository.GetByUserIdAsync(row.UserId, cancellationToken);
+
+        var j = row.Journey;
+        var waypoints = (j.JourneyWaypoints ?? new List<JourneyWaypoint>())
+            .OrderBy(w => w.StopOrder)
+            .ToList();
+
+        var visits = await _visitRepository.GetByJourneyTravelerAsync(j.Id, j.TravelerId, cancellationToken);
+        var visitByExperienceId = visits
+            .GroupBy(v => v.ExperienceId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.VisitedAt).First());
+
+        var waypointResponses = new List<PublicSharedJourneyWaypointResponse>();
+        foreach (var w in waypoints)
+        {
+            visitByExperienceId.TryGetValue(w.ExperienceId, out var visit);
+            var feedback = visit?.Feedback;
+            var rating = visit?.Rating;
+
+            waypointResponses.Add(new PublicSharedJourneyWaypointResponse
+            {
+                WaypointId = w.Id,
+                StopOrder = w.StopOrder,
+                ExperienceId = w.ExperienceId,
+                ExperienceName = w.Experience?.Name,
+                ExperienceAddress = w.Experience?.Address,
+                ExperienceLatitude = w.Experience?.Location?.Y,
+                ExperienceLongitude = w.Experience?.Location?.X,
+                ExperienceDescription = w.Experience?.ExperienceDetail?.RichDescription,
+                ExperiencePhotoUrls = w.Experience?.ExperiencePhotos
+                    ?.OrderByDescending(p => p.IsCover == true)
+                    .ThenByDescending(p => p.UploadedAt)
+                    .Select(p => p.PhotoUrl)
+                    .Where(u => !string.IsNullOrWhiteSpace(u))
+                    .Take(10)
+                    .ToList() ?? new List<string>(),
+                ActualArrivalAt = w.ActualArrivalAt,
+                ActualDepartureAt = w.ActualDepartureAt,
+                RatingValue = rating?.Rating1,
+                FeedbackText = feedback?.FeedbackText,
+                FeedbackCreatedAt = feedback?.CreatedAt
+            });
+        }
+
+        return new PublicSharedJourneyDetailResponse
+        {
+            ShareCode = row.ShareCode,
+            JourneyId = j.Id,
+            TravelerName = profile?.FullName,
+            TravelerAvatarUrl = profile?.AvatarUrl,
+            OriginAddress = j.OriginAddress,
+            DestinationAddress = j.DestinationAddress,
+            VehicleType = Enum.TryParse<VehicleType>(j.VehicleType, true, out var vt) ? vt : null,
+            StartedAt = j.StartedAt,
+            CompletedAt = j.CompletedAt,
+            ViewCount = row.ViewCount,
+            JourneyFeedback = j.JourneyFeedback,
+            Waypoints = waypointResponses
         };
     }
 

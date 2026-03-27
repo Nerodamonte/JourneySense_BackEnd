@@ -11,6 +11,10 @@ public interface ISharedJourneyRepository
 
     Task<SharedJourney?> GetByShareCodeWithJourneyAsync(string shareCode, CancellationToken cancellationToken = default);
 
+    Task<List<SharedJourney>> GetPublicCompletedAsync(int page, int pageSize, CancellationToken cancellationToken = default);
+
+    Task<SharedJourney?> GetPublicDetailAsync(string shareCode, CancellationToken cancellationToken = default);
+
     Task<bool> ShareCodeExistsAsync(string shareCode, CancellationToken cancellationToken = default);
 
     Task<SharedJourney> AddAsync(SharedJourney entity, CancellationToken cancellationToken = default);

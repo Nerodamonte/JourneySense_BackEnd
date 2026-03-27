@@ -52,4 +52,17 @@ public class VisitRepository : IVisitRepository
                 v.ExperienceId == experienceId,
                 cancellationToken);
     }
+
+    public async Task<List<Visit>> GetByJourneyTravelerAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Visits
+            .AsNoTracking()
+            .Include(v => v.Feedback)
+            .Include(v => v.Rating)
+            .Where(v => v.JourneyId == journeyId && v.TravelerId == travelerId)
+            .ToListAsync(cancellationToken);
+    }
 }

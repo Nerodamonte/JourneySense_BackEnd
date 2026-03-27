@@ -191,7 +191,7 @@ namespace JSEA_Application.Services.Profile
                 AccessibilityNeeds = profile?.AccessibilityNeeds,
 
                 TravelStyle = travelStyle,
-                RewardPoints = profile?.RewardPoints ?? 0
+                Point = profile?.RewardPoints ?? 0
             };
         }
     }

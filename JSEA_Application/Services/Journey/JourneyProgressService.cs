@@ -9,21 +9,26 @@ namespace JSEA_Application.Services.Journey;
 
 public class JourneyProgressService : IJourneyProgressService
 {
+    private const int CompleteJourneyPoints = 5;
+
     private readonly IJourneyRepository _journeyRepository;
     private readonly IVisitRepository _visitRepository;
     private readonly IFeedbackRepository _feedbackRepository;
     private readonly IRatingRepository _ratingRepository;
+    private readonly IRewardService _rewardService;
 
     public JourneyProgressService(
         IJourneyRepository journeyRepository,
         IVisitRepository visitRepository,
         IFeedbackRepository feedbackRepository,
-        IRatingRepository ratingRepository)
+        IRatingRepository ratingRepository,
+        IRewardService rewardService)
     {
         _journeyRepository = journeyRepository;
         _visitRepository = visitRepository;
         _feedbackRepository = feedbackRepository;
         _ratingRepository = ratingRepository;
+        _rewardService = rewardService;
     }
 
     public async Task<StartJourneyResponse?> StartJourneyAsync(Guid journeyId, Guid travelerId, CancellationToken cancellationToken = default)
@@ -67,19 +72,32 @@ public class JourneyProgressService : IJourneyProgressService
         if (!journey.StartedAt.HasValue)
             throw new InvalidOperationException("Hành trình chưa bắt đầu, không thể hoàn tất.");
 
+        // Idempotent: only award points when transitioning to Completed.
+        var shouldAwardPoints = status != JourneyStatus.Completed || !journey.CompletedAt.HasValue;
+
         // Idempotent: if already completed, return existing timestamp.
-        if (status != JourneyStatus.Completed || !journey.CompletedAt.HasValue)
+        if (shouldAwardPoints)
         {
             journey.Status = JourneyStatus.Completed.ToString();
             journey.CompletedAt ??= DateTime.UtcNow;
             journey.UpdatedAt = DateTime.UtcNow;
             await _journeyRepository.UpdateAsync(journey, cancellationToken);
+
+            await _rewardService.AddRewardPointsAsync(
+                travelerId,
+                CompleteJourneyPoints,
+                "complete_journey",
+                cancellationToken,
+                achievementId: null,
+                refId: journeyId,
+                refType: "journey");
         }
 
         return new CompleteJourneyResponse
         {
             JourneyId = journey.Id,
-            CompletedAt = journey.CompletedAt!.Value
+            CompletedAt = journey.CompletedAt!.Value,
+            PointsEarned = shouldAwardPoints ? CompleteJourneyPoints : 0
         };
     }
 
