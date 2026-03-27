@@ -1,5 +1,6 @@
 using JSEA_Application.DTOs.Request.Package;
 using JSEA_Application.DTOs.Respone.Package;
+using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
 
@@ -28,14 +29,14 @@ public class PackageService : IPackageService
 
     public async Task<PackageResponseDto> CreateAsync(CreatePackageDto dto, CancellationToken cancellationToken = default)
     {
-        Validate(dto.Price, dto.SalePrice);
+        Validate(dto.Price);
 
         var entity = new Models.Package
         {
             Title = dto.Title.Trim(),
             Price = dto.Price,
-            SalePrice = dto.SalePrice,
-            Type = dto.Type.Trim().ToLowerInvariant(),
+            SalePrice = null,
+            Type = NormalizeType(dto.Type),
             DistanceLimitKm = dto.DistanceLimitKm,
             DurationInDays = dto.DurationInDays,
             Benefit = dto.Benefit,
@@ -51,7 +52,7 @@ public class PackageService : IPackageService
 
     public async Task<PackageResponseDto?> UpdateAsync(Guid id, UpdatePackageDto dto, CancellationToken cancellationToken = default)
     {
-        Validate(dto.Price, dto.SalePrice);
+        Validate(dto.Price);
 
         var entity = await _packageRepository.GetByIdAsync(id, cancellationToken);
         if (entity == null)
@@ -59,8 +60,8 @@ public class PackageService : IPackageService
 
         entity.Title = dto.Title.Trim();
         entity.Price = dto.Price;
-        entity.SalePrice = dto.SalePrice;
-        entity.Type = dto.Type.Trim().ToLowerInvariant();
+        entity.SalePrice = null;
+        entity.Type = NormalizeType(dto.Type);
         entity.DistanceLimitKm = dto.DistanceLimitKm;
         entity.DurationInDays = dto.DurationInDays;
         entity.Benefit = dto.Benefit;
@@ -83,14 +84,15 @@ public class PackageService : IPackageService
         return MapToResponse(entity);
     }
 
-    private static void Validate(decimal price, decimal? salePrice)
+    private static void Validate(decimal price)
     {
         if (price < 0)
             throw new ArgumentException("Price không hợp lệ.");
-        if (salePrice.HasValue && salePrice.Value < 0)
-            throw new ArgumentException("SalePrice không hợp lệ.");
-        if (salePrice.HasValue && salePrice.Value > price)
-            throw new ArgumentException("SalePrice không được lớn hơn Price.");
+    }
+
+    private static string NormalizeType(PackageType type)
+    {
+        return type.ToString().ToLowerInvariant();
     }
 
     private static PackageResponseDto MapToResponse(Models.Package p)
