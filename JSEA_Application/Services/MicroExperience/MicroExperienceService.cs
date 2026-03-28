@@ -1,6 +1,8 @@
 using JSEA_Application.DTOs.Request.MicroExperience;
 using JSEA_Application.DTOs.Respone.MicroExperience;
 using JSEA_Application.Interfaces;
+using JSEA_Application.Models;
+using JSEA_Application.Services.Journey;
 using System.Text.RegularExpressions;
 using ExperienceEntity = JSEA_Application.Models.Experience;
 
@@ -11,15 +13,18 @@ public class MicroExperienceService : IMicroExperienceService
     private readonly IMicroExperienceRepository _repository;
     private readonly ICategoryRepository _categoryRepository;
     private readonly IGoongMapsService _goongMapsService;
+    private readonly EmbeddingGeneratorService _embeddingGenerator;
 
     public MicroExperienceService(
         IMicroExperienceRepository repository,
         ICategoryRepository categoryRepository,
-        IGoongMapsService goongMapsService)
+        IGoongMapsService goongMapsService,
+        EmbeddingGeneratorService embeddingGenerator)
     {
         _repository = repository;
         _categoryRepository = categoryRepository;
         _goongMapsService = goongMapsService;
+        _embeddingGenerator = embeddingGenerator;
     }
 
     public async Task<List<MicroExperienceListItemResponse>> GetListAsync(MicroExperienceFilter filter, CancellationToken cancellationToken = default)
@@ -77,11 +82,14 @@ public class MicroExperienceService : IMicroExperienceService
             WeatherSuitability = request.WeatherSuitability,
             Seasonality = request.Seasonality,
             AmenityTags = request.AmenityTags,
+            Tags = request.Tags,
             Status = "active"
         };
 
         var saved = await _repository.SaveAsync(entity, cancellationToken);
+        await ApplyExperienceDetailAsync(saved.Id, request.RichDescription, request.OpeningHours, request.PriceRange, request.CrowdLevel, cancellationToken);
         saved = await _repository.GetByIdAsync(saved.Id, cancellationToken)!;
+        await _embeddingGenerator.RegenerateEmbeddingForExperienceAsync(saved!.Id, cancellationToken);
         return MapToDetailResponse(saved!);
     }
 
@@ -110,6 +118,8 @@ public class MicroExperienceService : IMicroExperienceService
             entity.AccessibleBy = request.AccessibleBy;
         if (request.AmenityTags != null)
             entity.AmenityTags = request.AmenityTags;
+        if (request.Tags != null)
+            entity.Tags = request.Tags;
 
         var fullAddress = BuildFullAddress(request.Address, entity.City, entity.Country ?? "Vietnam");
         var location = await _goongMapsService.GeocodeAddressToPointAsync(fullAddress, cancellationToken);
@@ -118,7 +128,9 @@ public class MicroExperienceService : IMicroExperienceService
         entity.Location = location;
 
         var updated = await _repository.SaveAsync(entity, cancellationToken);
+        await MergeExperienceDetailOnUpdateAsync(updated, request, cancellationToken);
         updated = await _repository.GetByIdAsync(updated.Id, cancellationToken)!;
+        await _embeddingGenerator.RegenerateEmbeddingForExperienceAsync(updated!.Id, cancellationToken);
         return MapToDetailResponse(updated!);
     }
 
@@ -132,11 +144,64 @@ public class MicroExperienceService : IMicroExperienceService
         return true;
     }
 
+    private static bool HasAnyDetailInput(string? rich, string? hours, string? price, string? crowd) =>
+        !string.IsNullOrWhiteSpace(rich) || !string.IsNullOrWhiteSpace(hours) ||
+        !string.IsNullOrWhiteSpace(price) || !string.IsNullOrWhiteSpace(crowd);
+
+    private async Task ApplyExperienceDetailAsync(
+        Guid experienceId,
+        string? richDescription,
+        string? openingHours,
+        string? priceRange,
+        string? crowdLevel,
+        CancellationToken cancellationToken)
+    {
+        if (!HasAnyDetailInput(richDescription, openingHours, priceRange, crowdLevel))
+            return;
+
+        var crowd = string.IsNullOrWhiteSpace(crowdLevel) ? "normal" : crowdLevel.Trim().ToLowerInvariant();
+        await _repository.UpsertExperienceDetailAsync(new ExperienceDetail
+        {
+            ExperienceId = experienceId,
+            RichDescription = string.IsNullOrWhiteSpace(richDescription) ? null : richDescription.Trim(),
+            OpeningHours = string.IsNullOrWhiteSpace(openingHours) ? null : openingHours.Trim(),
+            PriceRange = string.IsNullOrWhiteSpace(priceRange) ? null : priceRange.Trim(),
+            CrowdLevel = crowd
+        }, cancellationToken);
+    }
+
+    /// <summary>Cập nhật detail: chỉ trường nào có trên request thì ghi đè, còn lại giữ giá trị cũ.</summary>
+    private async Task MergeExperienceDetailOnUpdateAsync(
+        ExperienceEntity entity,
+        UpdateMicroExperienceRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.RichDescription == null && request.OpeningHours == null && request.PriceRange == null &&
+            request.CrowdLevel == null)
+            return;
+
+        var rich = request.RichDescription ?? entity.ExperienceDetail?.RichDescription;
+        var hours = request.OpeningHours ?? entity.ExperienceDetail?.OpeningHours;
+        var price = request.PriceRange ?? entity.ExperienceDetail?.PriceRange;
+        var crowd = request.CrowdLevel ?? entity.ExperienceDetail?.CrowdLevel ?? "normal";
+        crowd = string.IsNullOrWhiteSpace(crowd) ? "normal" : crowd.Trim().ToLowerInvariant();
+
+        await _repository.UpsertExperienceDetailAsync(new ExperienceDetail
+        {
+            ExperienceId = entity.Id,
+            RichDescription = string.IsNullOrWhiteSpace(rich) ? null : rich.Trim(),
+            OpeningHours = string.IsNullOrWhiteSpace(hours) ? null : hours.Trim(),
+            PriceRange = string.IsNullOrWhiteSpace(price) ? null : price.Trim(),
+            CrowdLevel = crowd
+        }, cancellationToken);
+    }
+
     private static MicroExperienceDetailResponse MapToDetailResponse(ExperienceEntity entity)
     {
         return new MicroExperienceDetailResponse
         {
             Id = entity.Id,
+            CategoryId = entity.CategoryId,
             Name = entity.Name,
             CategoryName = entity.Category?.Name,
             RichDescription = entity.ExperienceDetail?.RichDescription,
@@ -151,6 +216,10 @@ public class MicroExperienceService : IMicroExperienceService
             WeatherSuitability = entity.WeatherSuitability,
             Seasonality = entity.Seasonality,
             AmenityTags = entity.AmenityTags,
+            Tags = entity.Tags,
+            OpeningHours = entity.ExperienceDetail?.OpeningHours,
+            PriceRange = entity.ExperienceDetail?.PriceRange,
+            CrowdLevel = entity.ExperienceDetail?.CrowdLevel,
             Latitude = entity.Location?.Y,
             Longitude = entity.Location?.X
         };

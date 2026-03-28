@@ -185,6 +185,7 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.IsFlagged).HasDefaultValue(false);
+            entity.Property(e => e.ModerationStatus).HasMaxLength(20).HasDefaultValue("approved");
             entity.HasOne(d => d.Visit).WithOne(p => p.Feedback)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_feedback_visit");

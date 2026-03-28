@@ -35,7 +35,7 @@ public class GoongController : ControllerBase
         if (limit is < 1 or > 20)
             limit = 10;
 
-        var list = await _goongMapsService.SearchPlaceSuggestionsAsync(input, latitude, longitude, limit, cancellationToken);
+        var list = await _goongMapsService.SearchPlaceSuggestionsAsync(input, latitude, longitude, limit, null, cancellationToken);
         return Ok(list);
     }
 

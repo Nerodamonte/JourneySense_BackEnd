@@ -1,5 +1,4 @@
 using JSEA_Application.DTOs.Request.MicroExperience;
-using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
 using JSEA_Infrastructure.Data;
@@ -89,6 +88,31 @@ public class MicroExperienceRepository : IMicroExperienceRepository
             _context.Experiences.Remove(entity);
             await _context.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    public async Task UpsertExperienceDetailAsync(ExperienceDetail detail, CancellationToken cancellationToken = default)
+    {
+        var existing = await _context.ExperienceDetails
+            .FirstOrDefaultAsync(e => e.ExperienceId == detail.ExperienceId, cancellationToken);
+
+        if (existing == null)
+        {
+            detail.CreatedAt ??= DateTime.UtcNow;
+            detail.UpdatedAt = DateTime.UtcNow;
+            _context.ExperienceDetails.Add(detail);
+        }
+        else
+        {
+            existing.RichDescription = detail.RichDescription;
+            existing.OpeningHours = detail.OpeningHours;
+            existing.PriceRange = detail.PriceRange;
+            existing.CrowdLevel = detail.CrowdLevel;
+            existing.SafetyNotes = detail.SafetyNotes;
+            existing.AccessibilityInfo = detail.AccessibilityInfo;
+            existing.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<int> CountAlongRouteAsync(NetTopologySuite.Geometries.LineString? routePath, int maxDetourDistanceMeters, CancellationToken cancellationToken = default)

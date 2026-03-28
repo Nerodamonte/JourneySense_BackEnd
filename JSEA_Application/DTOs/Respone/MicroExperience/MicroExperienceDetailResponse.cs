@@ -8,6 +8,9 @@ public class MicroExperienceDetailResponse
     /// <summary>Id Experience.</summary>
     public Guid Id { get; set; }
 
+    /// <summary>Id danh mục.</summary>
+    public Guid? CategoryId { get; set; }
+
     /// <summary>Tên Experience.</summary>
     public string? Name { get; set; }
 
@@ -49,6 +52,15 @@ public class MicroExperienceDetailResponse
 
     /// <summary>Tag tiện ích (amenity) cho experience.</summary>
     public List<string>? AmenityTags { get; set; }
+
+    /// <summary>Tag vibe.</summary>
+    public List<string>? Tags { get; set; }
+
+    public string? OpeningHours { get; set; }
+
+    public string? PriceRange { get; set; }
+
+    public string? CrowdLevel { get; set; }
 
     /// <summary>Vĩ độ (WGS84).</summary>
     public double? Latitude { get; set; }

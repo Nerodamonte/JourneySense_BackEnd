@@ -21,6 +21,11 @@ public partial class Feedback
     [Column("is_flagged")]
     public bool? IsFlagged { get; set; }
 
+    /// <summary>pending | approved | rejected — chỉ approved mới dùng trong RAG/mobile công khai.</summary>
+    [Column("moderation_status")]
+    [StringLength(20)]
+    public string ModerationStatus { get; set; } = "approved";
+
     [Column("flagged_reason")]
     public string? FlaggedReason { get; set; }
 

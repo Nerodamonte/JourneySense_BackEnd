@@ -1,3 +1,4 @@
+using JSEA_Application.Constants;
 using JSEA_Application.DTOs.Request.JourneyProgress;
 using JSEA_Application.DTOs.Respone.JourneyProgress;
 using JSEA_Application.Enums;
@@ -163,7 +164,9 @@ public class JourneyProgressService : IJourneyProgressService
                 {
                     VisitId = visit.Id,
                     FeedbackText = request.FeedbackText.Trim(),
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    ModerationStatus = FeedbackModerationStatuses.Pending,
+                    IsFlagged = false
                 }, cancellationToken);
                 feedbackId = feedback.Id;
             }

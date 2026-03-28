@@ -35,4 +35,7 @@ public interface IMicroExperienceRepository
 
     /// <summary>Lấy tất cả experiences active chưa có embedding, kèm Category + Detail. Dùng cho EmbeddingGeneratorService.</summary>
     Task<List<Experience>> GetActiveWithoutEmbeddingAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Tạo hoặc cập nhật experience_details cho một experience.</summary>
+    Task UpsertExperienceDetailAsync(ExperienceDetail detail, CancellationToken cancellationToken = default);
 }

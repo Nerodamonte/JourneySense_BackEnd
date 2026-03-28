@@ -14,9 +14,12 @@ using Microsoft.OpenApi.Models;
 
 using Npgsql;
 using Pgvector;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using JSEA_Application.Services.Journey;
+using JSEA_Application.Services.Portal;
+using JSEA_Infrastructure.Services;
 using JSEA_Application.Services.Profile;
 using JSEA_Presentation.JsonConverters;
 using JSEA_Application.Services.Category;
@@ -24,6 +27,8 @@ using JSEA_Application.Services.Package;
 using JSEA_Application.Services.UserPackage;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddHttpContextAccessor();
 
 #region Database + Enum mapping
 
@@ -90,6 +95,7 @@ builder.Services.AddScoped<IAchievementRepository, AchievementRepository>();
 builder.Services.AddScoped<IRewardTransactionRepository, RewardTransactionRepository>();
 builder.Services.AddScoped<ISharedJourneyRepository, SharedJourneyRepository>();
 builder.Services.AddScoped<IJourneyShareService, JSEA_Application.Services.Journey.JourneyShareService>();
+builder.Services.AddScoped<IEmergencyNearbyService, JSEA_Application.Services.Journey.EmergencyNearbyService>();
 
 //Embedding
 builder.Services.AddScoped<IExperienceEmbeddingRepository, ExperienceEmbeddingRepository>();
@@ -97,6 +103,14 @@ builder.Services.AddScoped<EmbeddingGeneratorService>();
 
 //Suggest pipeline
 builder.Services.AddScoped<ISuggestService, SuggestService>();
+
+// Admin / Staff portal
+builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+builder.Services.AddScoped<IPortalAuditLogger, PortalAuditLogger>();
+builder.Services.AddScoped<IAdminUserService, AdminUserService>();
+builder.Services.AddScoped<IAdminAnalyticsService, AdminAnalyticsService>();
+builder.Services.AddScoped<IAdminAuditLogService, AdminAuditLogService>();
+builder.Services.AddScoped<IStaffFeedbackService, StaffFeedbackService>();
 
 // Rate & Feedback
 builder.Services.AddScoped<IVisitRepository, VisitRepository>();
@@ -160,7 +174,8 @@ builder.Services
             ),
 
             ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero
+            ClockSkew = TimeSpan.Zero,
+            RoleClaimType = ClaimTypes.Role
         };
     })
 
@@ -246,6 +261,18 @@ builder.Services.AddSwaggerGen(c =>
 
 #endregion
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        if (origins is { Length: > 0 })
+            policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
+        else
+            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
+    });
+});
+
 var app = builder.Build();
 
 #region Middleware pipeline (THỨ TỰ CỰC QUAN TRỌNG)
@@ -256,6 +283,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCors();
 app.UseAuthentication(); 
 app.UseAuthorization();
 

@@ -1,6 +1,6 @@
 using JSEA_Application.DTOs.Request.Journey;
-using JSEA_Application.DTOs.Request.JourneyProgress;
 using JSEA_Application.DTOs.Respone.Journey;
+using JSEA_Application.DTOs.Request.JourneyProgress;
 using JSEA_Application.DTOs.Respone.JourneyProgress;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Enums;

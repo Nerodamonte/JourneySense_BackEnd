@@ -35,4 +35,18 @@ public class CreateMicroExperienceRequest
 
     /// <summary>Tag tiện ích (amenity) cho experience (vd: parking, wifi, restroom).</summary>
     public List<string>? AmenityTags { get; set; }
+
+    /// <summary>Tag vibe / cảm xúc (Chill, Explorer, ...) phục vụ embedding và gợi ý.</summary>
+    public List<string>? Tags { get; set; }
+
+    /// <summary>Mô tả phong phú cho AI embedding (100–200 chữ khuyến nghị).</summary>
+    public string? RichDescription { get; set; }
+
+    /// <summary>JSON giờ mở cửa (theo format app đang dùng).</summary>
+    public string? OpeningHours { get; set; }
+
+    public string? PriceRange { get; set; }
+
+    /// <summary>Crowd: quiet, normal, hoặc busy.</summary>
+    public string? CrowdLevel { get; set; }
 }

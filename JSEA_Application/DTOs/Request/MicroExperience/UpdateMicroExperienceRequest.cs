@@ -31,4 +31,15 @@ public class UpdateMicroExperienceRequest
 
     /// <summary>Tag tiện ích (amenity) cho experience.</summary>
     public List<string>? AmenityTags { get; set; }
+
+    public List<string>? Tags { get; set; }
+
+    public string? RichDescription { get; set; }
+
+    public string? OpeningHours { get; set; }
+
+    public string? PriceRange { get; set; }
+
+    /// <summary>Crowd: quiet, normal, hoặc busy.</summary>
+    public string? CrowdLevel { get; set; }
 }

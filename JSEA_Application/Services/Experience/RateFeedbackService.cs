@@ -1,3 +1,4 @@
+using JSEA_Application.Constants;
 using JSEA_Application.DTOs.Request.Experience;
 using JSEA_Application.DTOs.Respone.Experience;
 using JSEA_Application.Interfaces;
@@ -60,7 +61,9 @@ public class RateFeedbackService : IRateFeedbackService
             var feedback = new Feedback
             {
                 VisitId = visit.Id,
-                FeedbackText = request.FeedbackText?.Trim() ?? ""
+                FeedbackText = request.FeedbackText?.Trim() ?? "",
+                ModerationStatus = FeedbackModerationStatuses.Pending,
+                IsFlagged = false
             };
             feedback = await _feedbackRepository.SaveAsync(feedback, cancellationToken);
             feedbackId = feedback.Id;

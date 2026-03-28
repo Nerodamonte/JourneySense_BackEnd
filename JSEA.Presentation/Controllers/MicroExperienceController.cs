@@ -1,6 +1,8 @@
+using JSEA_Application.Constants;
 using JSEA_Application.DTOs.Request.MicroExperience;
 using JSEA_Application.DTOs.Respone.MicroExperience;
 using JSEA_Application.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace JSEA_Presentation.Controllers;
@@ -17,6 +19,7 @@ public class MicroExperienceController : ControllerBase
     }
 
 
+    /// <summary>Public read: mobile, admin (chỉ xem), staff. Không yêu cầu JWT.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(List<MicroExperienceListItemResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetList(
@@ -53,6 +56,7 @@ public class MicroExperienceController : ControllerBase
 
    
     [HttpPost]
+    [Authorize(Roles = AppRoles.Staff)]
     [ProducesResponseType(typeof(MicroExperienceDetailResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Create(
@@ -71,6 +75,7 @@ public class MicroExperienceController : ControllerBase
 
    
     [HttpPut("{id:guid}")]
+    [Authorize(Roles = AppRoles.Staff)]
     [ProducesResponseType(typeof(MicroExperienceDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -89,8 +94,9 @@ public class MicroExperienceController : ControllerBase
         return Ok(result);
     }
 
-
+   
     [HttpDelete("{id:guid}")]
+    [Authorize(Roles = AppRoles.Staff)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)

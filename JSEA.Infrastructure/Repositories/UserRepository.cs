@@ -1,4 +1,4 @@
-﻿using JSEA_Application.Interfaces;
+using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -40,6 +40,43 @@ namespace JSEA_Infrastructure.Repositories
         {
             _context.Users.Update(user);
             await _context.SaveChangesAsync();
+        }
+
+        public async Task<(List<User> Items, int TotalCount)> GetPagedAsync(
+            string? role,
+            string? status,
+            string? search,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default)
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 100);
+
+            var q = _context.Users.AsNoTracking().Where(u => u.DeletedAt == null);
+
+            if (!string.IsNullOrWhiteSpace(role))
+                q = q.Where(u => u.Role == role.Trim().ToLowerInvariant());
+
+            if (!string.IsNullOrWhiteSpace(status))
+                q = q.Where(u => u.Status == status.Trim().ToLowerInvariant());
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var s = search.Trim().ToLower();
+                q = q.Where(u =>
+                    u.Email.ToLower().Contains(s) ||
+                    (u.Phone != null && u.Phone.ToLower().Contains(s)));
+            }
+
+            var total = await q.CountAsync(cancellationToken);
+            var items = await q
+                .OrderByDescending(u => u.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+            return (items, total);
         }
     }
 }
