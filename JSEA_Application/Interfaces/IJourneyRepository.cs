@@ -1,4 +1,4 @@
-﻿using JSEA_Application.Models;
+using JSEA_Application.Models;
 using JSEA_Application.Enums;
 
 namespace JSEA_Application.Interfaces;
@@ -78,4 +78,16 @@ public interface IJourneyRepository
     /// Lấy các suggestionId đã có interaction (để tránh insert trùng).
     /// </summary>
     Task<List<Guid>> GetInteractionSuggestionIdsAsync(IEnumerable<Guid> suggestionIds, InteractionType interactionType, CancellationToken cancellationToken = default);
+
+    /// <summary>Thứ tự dừng của experience trên journey (waypoint đầu tiên nếu trùng experience).</summary>
+    Task<int?> GetStopOrderForExperienceOnJourneyAsync(Guid journeyId, Guid experienceId, CancellationToken cancellationToken = default);
+
+    /// <summary>Journey có journey_feedback không rỗng (staff duyệt).</summary>
+    Task<(List<Journey> Items, int TotalCount)> ListJourneyFeedbacksForStaffAsync(
+        string? moderationStatus,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> TryModerateJourneyFeedbackAsync(Guid journeyId, string moderationStatus, CancellationToken cancellationToken = default);
 }

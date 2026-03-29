@@ -10,11 +10,13 @@ namespace JSEA_Application.Services.Portal;
 public class AdminUserService : IAdminUserService
 {
     private readonly IUserRepository _users;
+    private readonly IUserProfileRepository _profiles;
     private readonly IPortalAuditLogger _audit;
 
-    public AdminUserService(IUserRepository users, IPortalAuditLogger audit)
+    public AdminUserService(IUserRepository users, IUserProfileRepository profiles, IPortalAuditLogger audit)
     {
         _users = users;
+        _profiles = profiles;
         _audit = audit;
     }
 
@@ -27,6 +29,8 @@ public class AdminUserService : IAdminUserService
         CancellationToken cancellationToken = default)
     {
         var (items, total) = await _users.GetPagedAsync(role, status, search, page, pageSize, cancellationToken);
+        var avatarByUser = await _profiles.GetAvatarUrlsByUserIdsAsync(items.Select(u => u.Id), cancellationToken);
+
         return new PortalPagedResult<AdminUserListItemDto>
         {
             Page = Math.Max(1, page),
@@ -40,7 +44,8 @@ public class AdminUserService : IAdminUserService
                 Role = u.Role,
                 Status = u.Status,
                 CreatedAt = u.CreatedAt,
-                LastLoginAt = u.LastLoginAt
+                LastLoginAt = u.LastLoginAt,
+                AvatarUrl = avatarByUser.TryGetValue(u.Id, out var av) ? av : null
             }).ToList()
         };
     }
@@ -50,6 +55,9 @@ public class AdminUserService : IAdminUserService
         var u = await _users.GetByIdAsync(userId);
         if (u == null || u.DeletedAt != null)
             return null;
+
+        var profile = await _profiles.GetByUserIdAsync(userId, cancellationToken);
+        var photo = profile?.AvatarUrl;
 
         return new AdminUserDetailDto
         {
@@ -62,7 +70,11 @@ public class AdminUserService : IAdminUserService
             PhoneVerified = u.PhoneVerified,
             CreatedAt = u.CreatedAt,
             UpdatedAt = u.UpdatedAt,
-            LastLoginAt = u.LastLoginAt
+            LastLoginAt = u.LastLoginAt,
+            FullName = profile?.FullName,
+            AvatarUrl = photo,
+            PhotoUrl = photo,
+            Bio = profile?.Bio
         };
     }
 

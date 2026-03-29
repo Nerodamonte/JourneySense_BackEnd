@@ -19,6 +19,45 @@ public class StaffFeedbacksController : ControllerBase
         _staffFeedback = staffFeedback;
     }
 
+    /// <summary>Danh sách feedback cả chuyến (journeys.journey_feedback) — duyệt riêng với feedback waypoint.</summary>
+    [HttpGet("journeys")]
+    [ProducesResponseType(typeof(PortalPagedResult<StaffJourneyFeedbackListItemDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListJourneyFeedbacks(
+        [FromQuery] string? moderationStatus,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var r = await _staffFeedback.ListJourneyFeedbacksAsync(moderationStatus, page, pageSize, cancellationToken);
+        return Ok(r);
+    }
+
+    /// <summary>Duyệt / từ chối feedback cả chuyến.</summary>
+    [HttpPost("journeys/{journeyId:guid}/moderate")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ModerateJourneyFeedback(
+        Guid journeyId,
+        [FromBody] ModerateFeedbackRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var actorId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var (ok, error) = await _staffFeedback.ModerateJourneyFeedbackAsync(
+            actorId,
+            journeyId,
+            request,
+            HttpContext.Connection.RemoteIpAddress,
+            Request.Headers.UserAgent.ToString(),
+            cancellationToken);
+
+        if (!ok)
+            return BadRequest(new { message = error });
+        return NoContent();
+    }
+
     /// <summary>7) Danh sách feedback (lọc moderationStatus, experienceId).</summary>
     [HttpGet]
     [ProducesResponseType(typeof(PortalPagedResult<StaffFeedbackListItemDto>), StatusCodes.Status200OK)]

@@ -12,15 +12,18 @@ public class StaffFeedbackService : IStaffFeedbackService
     private readonly IFeedbackRepository _feedbacks;
     private readonly IUserRepository _users;
     private readonly IPortalAuditLogger _audit;
+    private readonly IJourneyRepository _journeys;
 
     public StaffFeedbackService(
         IFeedbackRepository feedbacks,
         IUserRepository users,
-        IPortalAuditLogger audit)
+        IPortalAuditLogger audit,
+        IJourneyRepository journeys)
     {
         _feedbacks = feedbacks;
         _users = users;
         _audit = audit;
+        _journeys = journeys;
     }
 
     public async Task<PortalPagedResult<StaffFeedbackListItemDto>> ListAsync(
@@ -47,6 +50,13 @@ public class StaffFeedbackService : IStaffFeedbackService
             return null;
 
         var item = MapListItem(f);
+        int? stopOrder = null;
+        if (f.Visit.JourneyId.HasValue)
+            stopOrder = await _journeys.GetStopOrderForExperienceOnJourneyAsync(
+                f.Visit.JourneyId.Value,
+                f.Visit.ExperienceId,
+                cancellationToken);
+
         return new StaffFeedbackDetailDto
         {
             Id = item.Id,
@@ -59,8 +69,75 @@ public class StaffFeedbackService : IStaffFeedbackService
             ExperienceId = item.ExperienceId,
             ExperienceName = item.ExperienceName,
             TravelerId = item.TravelerId,
-            TravelerEmail = item.TravelerEmail
+            TravelerEmail = item.TravelerEmail,
+            JourneyId = f.Visit.JourneyId,
+            JourneyFeedback = f.Visit.Journey?.JourneyFeedback,
+            JourneyFeedbackModerationStatus = f.Visit.Journey?.JourneyFeedbackModerationStatus,
+            WaypointStopOrder = stopOrder
         };
+    }
+
+    public async Task<PortalPagedResult<StaffJourneyFeedbackListItemDto>> ListJourneyFeedbacksAsync(
+        string? moderationStatus,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var (items, total) = await _journeys.ListJourneyFeedbacksForStaffAsync(moderationStatus, page, pageSize, cancellationToken);
+        return new PortalPagedResult<StaffJourneyFeedbackListItemDto>
+        {
+            Page = Math.Max(1, page),
+            PageSize = Math.Clamp(pageSize, 1, 100),
+            TotalCount = total,
+            Items = items.Select(j => new StaffJourneyFeedbackListItemDto
+            {
+                JourneyId = j.Id,
+                TravelerId = j.TravelerId,
+                TravelerEmail = j.Traveler?.Email,
+                JourneyFeedback = j.JourneyFeedback ?? "",
+                ModerationStatus = j.JourneyFeedbackModerationStatus,
+                UpdatedAt = j.UpdatedAt
+            }).ToList()
+        };
+    }
+
+    public async Task<(bool Ok, string? Error)> ModerateJourneyFeedbackAsync(
+        Guid actorUserId,
+        Guid journeyId,
+        ModerateFeedbackRequest request,
+        IPAddress? ip,
+        string? userAgent,
+        CancellationToken cancellationToken = default)
+    {
+        var decision = (request.Decision ?? "").Trim().ToLowerInvariant();
+        if (decision is not ("approve" or "reject"))
+            return (false, "Decision phải là approve hoặc reject.");
+
+        var j = await _journeys.GetBasicByIdAsync(journeyId, cancellationToken);
+        if (j == null || string.IsNullOrWhiteSpace(j.JourneyFeedback))
+            return (false, "Không tìm thấy chuyến hoặc chưa có feedback chuyến.");
+
+        var old = new { j.JourneyFeedbackModerationStatus };
+        var modStatus = decision == "approve"
+            ? FeedbackModerationStatuses.Approved
+            : FeedbackModerationStatuses.Rejected;
+
+        var ok = await _journeys.TryModerateJourneyFeedbackAsync(journeyId, modStatus, cancellationToken);
+        if (!ok)
+            return (false, "Không cập nhật được trạng thái.");
+
+        await _audit.LogAsync(
+            actorUserId,
+            ActionType.StaffJourneyFeedbackModerated,
+            nameof(Journey),
+            journeyId,
+            old,
+            new { modStatus, request.Reason },
+            ip,
+            userAgent,
+            cancellationToken);
+
+        return (true, null);
     }
 
     public async Task<(bool Ok, string? Error)> ModerateAsync(

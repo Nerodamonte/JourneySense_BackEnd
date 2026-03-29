@@ -3,6 +3,7 @@ using JSEA_Application.DTOs.Respone.MicroExperience;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
 using JSEA_Application.Services.Journey;
+using NetTopologySuite.Geometries;
 using System.Text.RegularExpressions;
 using ExperienceEntity = JSEA_Application.Models.Experience;
 
@@ -14,17 +15,20 @@ public class MicroExperienceService : IMicroExperienceService
     private readonly ICategoryRepository _categoryRepository;
     private readonly IGoongMapsService _goongMapsService;
     private readonly EmbeddingGeneratorService _embeddingGenerator;
+    private readonly IExperiencePhotoStorage _photoStorage;
 
     public MicroExperienceService(
         IMicroExperienceRepository repository,
         ICategoryRepository categoryRepository,
         IGoongMapsService goongMapsService,
-        EmbeddingGeneratorService embeddingGenerator)
+        EmbeddingGeneratorService embeddingGenerator,
+        IExperiencePhotoStorage photoStorage)
     {
         _repository = repository;
         _categoryRepository = categoryRepository;
         _goongMapsService = goongMapsService;
         _embeddingGenerator = embeddingGenerator;
+        _photoStorage = photoStorage;
     }
 
     public async Task<List<MicroExperienceListItemResponse>> GetListAsync(MicroExperienceFilter filter, CancellationToken cancellationToken = default)
@@ -40,7 +44,12 @@ public class MicroExperienceService : IMicroExperienceService
             Status = x.Status,
             PreferredTimes = x.PreferredTimes,
             Latitude = x.Location?.Y,
-            Longitude = x.Location?.X
+            Longitude = x.Location?.X,
+            CoverPhotoUrl = x.ExperiencePhotos?
+                .OrderByDescending(p => p.IsCover == true)
+                .ThenBy(p => p.UploadedAt)
+                .Select(p => p.PhotoUrl)
+                .FirstOrDefault()
         }).ToList();
     }
 
@@ -59,8 +68,13 @@ public class MicroExperienceService : IMicroExperienceService
         if (await _repository.ExistsBySlugAsync(slug, cancellationToken))
             return null;
 
-        var fullAddress = BuildFullAddress(request.Address, request.City, request.Country ?? "Vietnam");
-        var location = await _goongMapsService.GeocodeAddressToPointAsync(fullAddress, cancellationToken);
+        var location = await ResolveLocationAsync(
+            request.Latitude,
+            request.Longitude,
+            request.Address,
+            request.City,
+            request.Country ?? "Vietnam",
+            cancellationToken);
         if (location == null)
             return null;
 
@@ -88,6 +102,7 @@ public class MicroExperienceService : IMicroExperienceService
 
         var saved = await _repository.SaveAsync(entity, cancellationToken);
         await ApplyExperienceDetailAsync(saved.Id, request.RichDescription, request.OpeningHours, request.PriceRange, request.CrowdLevel, cancellationToken);
+        await ApplyPhotoInputsIfAnyAsync(saved.Id, request.Photos, cancellationToken);
         saved = await _repository.GetByIdAsync(saved.Id, cancellationToken)!;
         await _embeddingGenerator.RegenerateEmbeddingForExperienceAsync(saved!.Id, cancellationToken);
         return MapToDetailResponse(saved!);
@@ -121,17 +136,73 @@ public class MicroExperienceService : IMicroExperienceService
         if (request.Tags != null)
             entity.Tags = request.Tags;
 
-        var fullAddress = BuildFullAddress(request.Address, entity.City, entity.Country ?? "Vietnam");
-        var location = await _goongMapsService.GeocodeAddressToPointAsync(fullAddress, cancellationToken);
+        var location = await ResolveLocationAsync(
+            request.Latitude,
+            request.Longitude,
+            request.Address,
+            entity.City,
+            entity.Country ?? "Vietnam",
+            cancellationToken);
         if (location == null)
             return null;
         entity.Location = location;
 
         var updated = await _repository.SaveAsync(entity, cancellationToken);
         await MergeExperienceDetailOnUpdateAsync(updated, request, cancellationToken);
+        await ApplyPhotoInputsIfAnyAsync(updated.Id, request.Photos, cancellationToken);
         updated = await _repository.GetByIdAsync(updated.Id, cancellationToken)!;
         await _embeddingGenerator.RegenerateEmbeddingForExperienceAsync(updated!.Id, cancellationToken);
         return MapToDetailResponse(updated!);
+    }
+
+    public async Task<ExperiencePhotoResponse?> UploadPhotoAsync(
+        Guid experienceId,
+        Stream fileStream,
+        string contentType,
+        string fileName,
+        string? caption,
+        bool isCover,
+        Guid? createdByUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (await _repository.GetByIdAsync(experienceId, cancellationToken) == null)
+            return null;
+
+        var url = await _photoStorage.SavePhotoAsync(experienceId, fileStream, contentType, fileName, cancellationToken);
+        var rows = await _repository.AddExperiencePhotosAsync(experienceId, new List<ExperiencePhoto>
+        {
+            new()
+            {
+                PhotoUrl = url,
+                ThumbnailUrl = null,
+                Caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim(),
+                IsCover = isCover,
+                CreatedByUserId = createdByUserId
+            }
+        }, cancellationToken);
+
+        var p = rows[0];
+        return new ExperiencePhotoResponse
+        {
+            Id = p.Id,
+            PhotoUrl = p.PhotoUrl,
+            ThumbnailUrl = p.ThumbnailUrl,
+            Caption = p.Caption,
+            IsCover = p.IsCover == true,
+            UploadedAt = p.UploadedAt
+        };
+    }
+
+    public async Task<bool> DeletePhotoAsync(Guid experienceId, Guid photoId, CancellationToken cancellationToken = default)
+    {
+        var photo = await _repository.GetPhotoAsync(experienceId, photoId, cancellationToken);
+        if (photo == null)
+            return false;
+        var url = photo.PhotoUrl;
+        var ok = await _repository.DeleteExperiencePhotoAsync(experienceId, photoId, cancellationToken);
+        if (ok)
+            await _photoStorage.TryDeleteStoredFileAsync(url, cancellationToken);
+        return ok;
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -171,6 +242,28 @@ public class MicroExperienceService : IMicroExperienceService
     }
 
     /// <summary>Cập nhật detail: chỉ trường nào có trên request thì ghi đè, còn lại giữ giá trị cũ.</summary>
+    private async Task ApplyPhotoInputsIfAnyAsync(Guid experienceId, List<ExperiencePhotoInput>? photos, CancellationToken cancellationToken)
+    {
+        if (photos == null || photos.Count == 0)
+            return;
+
+        var list = photos
+            .Where(p => !string.IsNullOrWhiteSpace(p.PhotoUrl))
+            .Select(p => new ExperiencePhoto
+            {
+                PhotoUrl = p.PhotoUrl.Trim(),
+                ThumbnailUrl = string.IsNullOrWhiteSpace(p.ThumbnailUrl) ? null : p.ThumbnailUrl.Trim(),
+                Caption = string.IsNullOrWhiteSpace(p.Caption) ? null : p.Caption.Trim(),
+                IsCover = p.IsCover
+            })
+            .ToList();
+
+        if (list.Count == 0)
+            return;
+
+        await _repository.AddExperiencePhotosAsync(experienceId, list, cancellationToken);
+    }
+
     private async Task MergeExperienceDetailOnUpdateAsync(
         ExperienceEntity entity,
         UpdateMicroExperienceRequest request,
@@ -221,7 +314,20 @@ public class MicroExperienceService : IMicroExperienceService
             PriceRange = entity.ExperienceDetail?.PriceRange,
             CrowdLevel = entity.ExperienceDetail?.CrowdLevel,
             Latitude = entity.Location?.Y,
-            Longitude = entity.Location?.X
+            Longitude = entity.Location?.X,
+            Photos = entity.ExperiencePhotos?
+                .OrderByDescending(p => p.IsCover == true)
+                .ThenBy(p => p.UploadedAt)
+                .Select(p => new ExperiencePhotoResponse
+                {
+                    Id = p.Id,
+                    PhotoUrl = p.PhotoUrl,
+                    ThumbnailUrl = p.ThumbnailUrl,
+                    Caption = p.Caption,
+                    IsCover = p.IsCover == true,
+                    UploadedAt = p.UploadedAt
+                })
+                .ToList()
         };
     }
 
@@ -233,6 +339,28 @@ public class MicroExperienceService : IMicroExperienceService
         slug = Regex.Replace(slug, @"\s+", "-");
         slug = Regex.Replace(slug, @"-+", "-").Trim('-');
         return string.IsNullOrEmpty(slug) ? "experience" : slug;
+    }
+
+    private async Task<Point?> ResolveLocationAsync(
+        double? latitude,
+        double? longitude,
+        string? address,
+        string? city,
+        string country,
+        CancellationToken cancellationToken)
+    {
+        if (latitude.HasValue && longitude.HasValue)
+        {
+            return new Point(
+                Math.Round(longitude.Value, 6),
+                Math.Round(latitude.Value, 6))
+            {
+                SRID = 4326
+            };
+        }
+
+        var fullAddress = BuildFullAddress(address, city, country);
+        return await _goongMapsService.GeocodeAddressToPointAsync(fullAddress, cancellationToken);
     }
 
     private static string BuildFullAddress(string? address, string? city, string? country)

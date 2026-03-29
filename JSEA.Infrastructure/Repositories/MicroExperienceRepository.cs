@@ -42,6 +42,8 @@ public class MicroExperienceRepository : IMicroExperienceRepository
         }
 
         return await query
+            .Include(x => x.ExperiencePhotos)
+            .AsSplitQuery()
             .OrderBy(x => x.Name)
             .ToListAsync(cancellationToken);
     }
@@ -52,6 +54,7 @@ public class MicroExperienceRepository : IMicroExperienceRepository
             .Include(x => x.Category)
             .Include(x => x.ExperienceDetail)
             .Include(x => x.ExperienceMetric)
+            .Include(x => x.ExperiencePhotos)
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
     }
 
@@ -230,5 +233,53 @@ public class MicroExperienceRepository : IMicroExperienceRepository
             .Where(e => e.Status == "active")
             .Where(e => !_context.ExperienceEmbeddings.Any(ee => ee.ExperienceId == e.Id))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<ExperiencePhoto>> AddExperiencePhotosAsync(
+        Guid experienceId,
+        List<ExperiencePhoto> photos,
+        CancellationToken cancellationToken = default)
+    {
+        if (photos.Count == 0)
+            return photos;
+
+        if (photos.Any(p => p.IsCover == true))
+        {
+            var existing = await _context.ExperiencePhotos
+                .Where(p => p.ExperienceId == experienceId)
+                .ToListAsync(cancellationToken);
+            foreach (var e in existing)
+                e.IsCover = false;
+        }
+
+        var saved = new List<ExperiencePhoto>();
+        foreach (var p in photos)
+        {
+            p.ExperienceId = experienceId;
+            if (p.Id == Guid.Empty)
+                p.Id = Guid.NewGuid();
+            p.UploadedAt = DateTime.UtcNow;
+            _context.ExperiencePhotos.Add(p);
+            saved.Add(p);
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+        return saved;
+    }
+
+    public async Task<ExperiencePhoto?> GetPhotoAsync(Guid experienceId, Guid photoId, CancellationToken cancellationToken = default)
+    {
+        return await _context.ExperiencePhotos
+            .FirstOrDefaultAsync(p => p.Id == photoId && p.ExperienceId == experienceId, cancellationToken);
+    }
+
+    public async Task<bool> DeleteExperiencePhotoAsync(Guid experienceId, Guid photoId, CancellationToken cancellationToken = default)
+    {
+        var photo = await GetPhotoAsync(experienceId, photoId, cancellationToken);
+        if (photo == null)
+            return false;
+        _context.ExperiencePhotos.Remove(photo);
+        await _context.SaveChangesAsync(cancellationToken);
+        return true;
     }
 }

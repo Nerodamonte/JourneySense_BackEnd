@@ -40,6 +40,9 @@ public class JourneyDetailResponse
 
     public string? JourneyFeedback { get; set; }
 
+    /// <summary>Khi có nội dung feedback chuyến: pending | approved | rejected. Chủ chuyến luôn xem được nội dung; người khác chỉ khi approved.</summary>
+    public string? JourneyFeedbackModerationStatus { get; set; }
+
     /// <summary>
     /// Main route geometry (WGS84) for reloading map after app restart.
     /// </summary>

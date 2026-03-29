@@ -11,6 +11,9 @@ public class AdminUserListItemDto
     public string Status { get; set; } = null!;
     public DateTime? CreatedAt { get; set; }
     public DateTime? LastLoginAt { get; set; }
+
+    /// <summary>Ảnh đại diện từ user_profiles.avatar_url (null nếu chưa có hồ sơ / chưa đặt).</summary>
+    public string? AvatarUrl { get; set; }
 }
 
 public class AdminUserDetailDto
@@ -25,6 +28,16 @@ public class AdminUserDetailDto
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
     public DateTime? LastLoginAt { get; set; }
+
+    /// <summary>Từ user_profiles — có thể null nếu chưa tạo hồ sơ.</summary>
+    public string? FullName { get; set; }
+
+    public string? AvatarUrl { get; set; }
+
+    /// <summary>Cùng nguồn với avatarUrl — tiện cho FE đặt tên “ảnh đại diện”.</summary>
+    public string? PhotoUrl { get; set; }
+
+    public string? Bio { get; set; }
 }
 
 public class CreateStaffAccountRequest

@@ -13,6 +13,23 @@ public class UserProfileRepository : IUserProfileRepository
         _context = context;
     }
 
+    public async Task<Dictionary<Guid, string?>> GetAvatarUrlsByUserIdsAsync(
+        IEnumerable<Guid> userIds,
+        CancellationToken cancellationToken = default)
+    {
+        var ids = userIds.Distinct().ToList();
+        if (ids.Count == 0)
+            return new Dictionary<Guid, string?>();
+
+        var rows = await _context.UserProfiles
+            .AsNoTracking()
+            .Where(p => ids.Contains(p.UserId))
+            .Select(p => new { p.UserId, p.AvatarUrl })
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(x => x.UserId, x => x.AvatarUrl);
+    }
+
     public async Task<UserProfile?> GetByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         return await _context.UserProfiles

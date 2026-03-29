@@ -10,4 +10,16 @@ public interface IMicroExperienceService
     Task<MicroExperienceDetailResponse?> CreateAsync(CreateMicroExperienceRequest request, CancellationToken cancellationToken = default);
     Task<MicroExperienceDetailResponse?> UpdateAsync(Guid id, UpdateMicroExperienceRequest request, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<ExperiencePhotoResponse?> UploadPhotoAsync(
+        Guid experienceId,
+        Stream fileStream,
+        string contentType,
+        string fileName,
+        string? caption,
+        bool isCover,
+        Guid? createdByUserId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> DeletePhotoAsync(Guid experienceId, Guid photoId, CancellationToken cancellationToken = default);
 }

@@ -17,9 +17,9 @@ public interface IJourneyService
     Task<List<JourneyListItemResponse>> GetMyJourneysAsync(Guid? travelerId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lấy chi tiết một journey theo id.
+    /// Lấy chi tiết một journey theo id. <paramref name="viewerTravelerId"/>: nếu trùng chủ chuyến, xem được feedback chưa duyệt.
     /// </summary>
-    Task<JourneyDetailResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
+    Task<JourneyDetailResponse?> GetByIdAsync(Guid id, Guid? viewerTravelerId, CancellationToken cancellationToken = default);
 
     Task<bool> UpdateJourneyFeedbackAsync(
         Guid journeyId,

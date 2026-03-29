@@ -16,6 +16,7 @@ using Npgsql;
 using Pgvector;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using JSEA_Application.Services.Journey;
 using JSEA_Application.Services.Portal;
@@ -72,6 +73,7 @@ builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 
 // Micro-Experience
+builder.Services.AddScoped<IExperiencePhotoStorage, LocalExperiencePhotoStorage>();
 builder.Services.AddScoped<IMicroExperienceService, JSEA_Application.Services.MicroExperience.MicroExperienceService>();
 builder.Services.AddScoped<IMicroExperienceRepository, MicroExperienceRepository>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
@@ -133,6 +135,7 @@ builder.Services.AddScoped<IPurchaseService, JSEA_Application.Services.Payment.P
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
+        options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
         options.JsonSerializerOptions.Converters.Add(
             new JsonStringEnumConverter()
         );
@@ -284,8 +287,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
-app.UseAuthentication(); 
+app.UseAuthentication();
 app.UseAuthorization();
+app.UseStaticFiles();
 
 app.MapControllers();
 

@@ -21,6 +21,16 @@ public interface IFeedbackRepository
     /// <summary>Lấy top N feedbacks mới nhất của một experience (đã duyệt, không bị flag). Dùng cho RAG prompt.</summary>
     Task<List<string>> GetTopByExperienceIdAsync(Guid experienceId, int topN, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Feedback công khai theo experience (đã duyệt). Có thể loại bỏ feedback của chính viewer.
+    /// </summary>
+    Task<(List<Feedback> Items, int TotalCount)> ListPublicApprovedForExperienceAsync(
+        Guid experienceId,
+        Guid? excludeTravelerId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
     Task<bool> TryModerateAsync(
         Guid feedbackId,
         string moderationStatus,

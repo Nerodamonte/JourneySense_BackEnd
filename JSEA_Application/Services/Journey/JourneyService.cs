@@ -1,3 +1,4 @@
+using JSEA_Application.Constants;
 using JSEA_Application.DTOs.Request.Journey;
 using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.Enums;
@@ -13,19 +14,20 @@ public class JourneyService : IJourneyService
     private readonly IGoongMapsService _goongMapsService;
     private readonly IMicroExperienceRepository _microExperienceRepository;
     private readonly IExperienceEmbeddingRepository _embeddingRepository;
-
+    private readonly IVisitRepository _visitRepository;
 
     public JourneyService(
         IJourneyRepository journeyRepository,
         IGoongMapsService goongMapsService,
         IMicroExperienceRepository microExperienceRepository,
-        IExperienceEmbeddingRepository embeddingRepository)
-
+        IExperienceEmbeddingRepository embeddingRepository,
+        IVisitRepository visitRepository)
     {
         _journeyRepository = journeyRepository;
         _goongMapsService = goongMapsService;
         _microExperienceRepository = microExperienceRepository;
         _embeddingRepository = embeddingRepository;
+        _visitRepository = visitRepository;
     }
 
     private static int EstimateDetourMinutes(int detourMeters, string vehicleType)
@@ -205,11 +207,19 @@ public class JourneyService : IJourneyService
         }).ToList();
     }
 
-    public async Task<JourneyDetailResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task<JourneyDetailResponse?> GetByIdAsync(Guid id, Guid? viewerTravelerId, CancellationToken cancellationToken = default)
     {
         var j = await _journeyRepository.GetByIdAsync(id, cancellationToken);
         if (j == null)
             return null;
+
+        var viewerIsOwner = viewerTravelerId.HasValue && viewerTravelerId.Value == j.TravelerId;
+        var hasJourneyFeedback = !string.IsNullOrWhiteSpace(j.JourneyFeedback);
+        var showJourneyFeedbackText = hasJourneyFeedback &&
+            (viewerIsOwner || string.Equals(
+                j.JourneyFeedbackModerationStatus,
+                FeedbackModerationStatuses.Approved,
+                StringComparison.OrdinalIgnoreCase));
 
         Guid? selectedSegmentId = null;
         if (j.JourneyWaypoints != null && j.JourneyWaypoints.Count > 0)
@@ -242,24 +252,34 @@ public class JourneyService : IJourneyService
             })
             .ToList();
 
+        var visits = await _visitRepository.GetByJourneyTravelerAsync(j.Id, j.TravelerId, cancellationToken);
+        var visitByExperienceId = visits
+            .GroupBy(v => v.ExperienceId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.VisitedAt).First());
+
         var waypoints = j.JourneyWaypoints?
             .OrderBy(w => w.StopOrder)
-            .Select(w => new JourneyWaypointResponse
+            .Select(w =>
             {
-                WaypointId = w.Id,
-                ExperienceId = w.ExperienceId,
-                SuggestionId = w.SuggestionId,
-                SegmentId = w.Suggestion?.SegmentId,
-                StopOrder = w.StopOrder,
-                Name = w.Experience?.Name,
-                CategoryName = w.Experience?.Category?.Name,
-                Address = w.Experience?.Address,
-                City = w.Experience?.City,
-                Latitude = w.Experience?.Location?.Y,
-                Longitude = w.Experience?.Location?.X,
-                CoverPhotoUrl = w.Experience?.ExperiencePhotos?.FirstOrDefault(p => p.IsCover == true)?.PhotoUrl,
-                DetourDistanceMeters = w.Suggestion?.DetourDistanceMeters,
-                DetourTimeMinutes = w.Suggestion?.DetourTimeMinutes
+                visitByExperienceId.TryGetValue(w.ExperienceId, out var visit);
+                return new JourneyWaypointResponse
+                {
+                    WaypointId = w.Id,
+                    ExperienceId = w.ExperienceId,
+                    SuggestionId = w.SuggestionId,
+                    SegmentId = w.Suggestion?.SegmentId,
+                    StopOrder = w.StopOrder,
+                    Name = w.Experience?.Name,
+                    CategoryName = w.Experience?.Category?.Name,
+                    Address = w.Experience?.Address,
+                    City = w.Experience?.City,
+                    Latitude = w.Experience?.Location?.Y,
+                    Longitude = w.Experience?.Location?.X,
+                    CoverPhotoUrl = w.Experience?.ExperiencePhotos?.FirstOrDefault(p => p.IsCover == true)?.PhotoUrl,
+                    DetourDistanceMeters = w.Suggestion?.DetourDistanceMeters,
+                    DetourTimeMinutes = w.Suggestion?.DetourTimeMinutes,
+                    VisitFeedback = MapWaypointVisitFeedback(visit, j.TravelerId, viewerTravelerId)
+                };
             })
             .ToList();
 
@@ -281,7 +301,8 @@ public class JourneyService : IJourneyService
             StartedAt = j.StartedAt,
             CompletedAt = j.CompletedAt,
             CreatedAt = j.CreatedAt,
-            JourneyFeedback = j.JourneyFeedback,
+            JourneyFeedback = showJourneyFeedbackText ? j.JourneyFeedback : null,
+            JourneyFeedbackModerationStatus = hasJourneyFeedback ? j.JourneyFeedbackModerationStatus : null,
             RoutePoints = routePoints,
             Segments = segments,
             Waypoints = waypoints,
@@ -649,10 +670,48 @@ public class JourneyService : IJourneyService
         if (journey == null || journey.TravelerId != travelerId)
             return false;
 
-        journey.JourneyFeedback = string.IsNullOrWhiteSpace(journeyFeedback) ? null : journeyFeedback.Trim();
+        if (string.IsNullOrWhiteSpace(journeyFeedback))
+        {
+            journey.JourneyFeedback = null;
+            journey.JourneyFeedbackModerationStatus = FeedbackModerationStatuses.Approved;
+        }
+        else
+        {
+            journey.JourneyFeedback = journeyFeedback.Trim();
+            journey.JourneyFeedbackModerationStatus = FeedbackModerationStatuses.Pending;
+        }
+
         journey.UpdatedAt = DateTime.UtcNow;
         await _journeyRepository.UpdateAsync(journey, cancellationToken);
         return true;
+    }
+
+    private static JourneyWaypointVisitFeedbackResponse? MapWaypointVisitFeedback(
+        Visit? visit,
+        Guid journeyOwnerTravelerId,
+        Guid? viewerTravelerId)
+    {
+        if (visit == null)
+            return null;
+
+        var fb = visit.Feedback;
+        var rating = visit.Rating;
+        if (fb == null && rating == null)
+            return null;
+
+        var viewerIsOwner = viewerTravelerId.HasValue && viewerTravelerId.Value == journeyOwnerTravelerId;
+        var showText = fb == null || viewerIsOwner ||
+            string.Equals(fb.ModerationStatus, FeedbackModerationStatuses.Approved, StringComparison.OrdinalIgnoreCase);
+
+        return new JourneyWaypointVisitFeedbackResponse
+        {
+            VisitId = visit.Id,
+            FeedbackId = fb?.Id,
+            FeedbackText = showText ? fb?.FeedbackText : null,
+            ModerationStatus = fb?.ModerationStatus,
+            FeedbackCreatedAt = fb?.CreatedAt,
+            Rating = rating?.Rating1
+        };
     }
 
     private sealed record WaypointCandidate(JourneyWaypoint Waypoint, Point Location);

@@ -38,4 +38,11 @@ public interface IMicroExperienceRepository
 
     /// <summary>Tạo hoặc cập nhật experience_details cho một experience.</summary>
     Task UpsertExperienceDetailAsync(ExperienceDetail detail, CancellationToken cancellationToken = default);
+
+    /// <summary>Thêm ảnh; nếu có <c>IsCover</c>, gỡ cover các ảnh khác của cùng experience.</summary>
+    Task<List<ExperiencePhoto>> AddExperiencePhotosAsync(Guid experienceId, List<ExperiencePhoto> photos, CancellationToken cancellationToken = default);
+
+    Task<ExperiencePhoto?> GetPhotoAsync(Guid experienceId, Guid photoId, CancellationToken cancellationToken = default);
+
+    Task<bool> DeleteExperiencePhotoAsync(Guid experienceId, Guid photoId, CancellationToken cancellationToken = default);
 }

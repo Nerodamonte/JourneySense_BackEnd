@@ -198,6 +198,9 @@ public partial class AppDbContext : DbContext
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("now()");
             entity.Property(e => e.PreferredCrowdLevel).HasDefaultValue("all");
             entity.Property(e => e.Status).HasDefaultValue("planning");
+            entity.Property(e => e.JourneyFeedbackModerationStatus)
+                .HasMaxLength(20)
+                .HasDefaultValue("approved");
             entity.HasOne(d => d.Traveler).WithMany(p => p.Journeys)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_journey_user");

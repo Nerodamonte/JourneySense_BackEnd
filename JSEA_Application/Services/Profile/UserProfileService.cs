@@ -1,3 +1,4 @@
+using JSEA_Application.Constants;
 using JSEA_Application.DTOs.Request.Profile;
 using JSEA_Application.DTOs.Respone.Profile;
 using JSEA_Application.Enums;
@@ -39,15 +40,20 @@ namespace JSEA_Application.Services.Profile
             UpdateProfileRequest request,
             CancellationToken cancellationToken = default)
         {
+            var userForRole = await _userRepository.GetByIdAsync(userId);
+            if (userForRole == null)
+                throw new UnauthorizedAccessException("User không tồn tại hoặc không hợp lệ.");
+
+            var isPortalUser = IsPortalRole(userForRole.Role);
+
             if (request.Phone != null)
             {
-                var user = await _userRepository.GetByIdAsync(userId);
-                if (user != null && user.Phone != request.Phone)
+                if (userForRole.Phone != request.Phone)
                 {
-                    user.Phone = request.Phone;
-                    user.PhoneVerified = false;
-                    user.UpdatedAt = DateTime.UtcNow;
-                    await _userRepository.UpdateAsync(user);
+                    userForRole.Phone = request.Phone;
+                    userForRole.PhoneVerified = false;
+                    userForRole.UpdatedAt = DateTime.UtcNow;
+                    await _userRepository.UpdateAsync(userForRole);
                 }
             }
 
@@ -57,8 +63,10 @@ namespace JSEA_Application.Services.Profile
             var hasExistingTravelStyle = profile?.TravelStyle != null && profile.TravelStyle.Count > 0;
             var incomingTravelStyle = request.TravelStyle;
 
-            // Lần đầu bắt buộc truyền travel style để generate travel_style_text cho suggest pipeline.
-            if (!hasExistingTravelStyle && (incomingTravelStyle == null || incomingTravelStyle.Count == 0))
+            // Traveler: lần đầu bắt buộc travel style cho suggest pipeline. Admin/staff: không dùng.
+            if (!isPortalUser
+                && !hasExistingTravelStyle
+                && (incomingTravelStyle == null || incomingTravelStyle.Count == 0))
                 throw new InvalidOperationException("Vui lòng chọn ít nhất 1 travel style.");
 
             profile ??= new UserProfile
@@ -79,8 +87,8 @@ namespace JSEA_Application.Services.Profile
             if (request.AccessibilityNeeds != null)
                 profile.AccessibilityNeeds = request.AccessibilityNeeds;
 
-            // TravelStyle + TravelStyleText: chỉ cập nhật/generate khi client truyền TravelStyle và nó thực sự thay đổi.
-            if (incomingTravelStyle != null)
+            // TravelStyle + TravelStyleText: chỉ traveler; admin/staff bỏ qua request.TravelStyle.
+            if (!isPortalUser && incomingTravelStyle != null)
             {
                 if (incomingTravelStyle.Count == 0)
                     throw new InvalidOperationException("Vui lòng chọn ít nhất 1 travel style.");
@@ -169,19 +177,30 @@ namespace JSEA_Application.Services.Profile
 
             var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
 
-            var travelStyle = new List<VibeType>();
-            if (profile?.TravelStyle != null)
+            var isPortalUser = IsPortalRole(user.Role);
+
+            List<VibeType>? travelStyle = null;
+            int? points = null;
+
+            if (!isPortalUser)
             {
-                foreach (var s in profile.TravelStyle)
+                travelStyle = new List<VibeType>();
+                if (profile?.TravelStyle != null)
                 {
-                    if (Enum.TryParse<VibeType>(s, ignoreCase: true, out var vibe))
-                        travelStyle.Add(vibe);
+                    foreach (var s in profile.TravelStyle)
+                    {
+                        if (Enum.TryParse<VibeType>(s, ignoreCase: true, out var vibe))
+                            travelStyle.Add(vibe);
+                    }
                 }
+
+                points = profile?.RewardPoints ?? 0;
             }
 
             return new ProfileResponse
             {
                 UserId = userId,
+                Role = user.Role,
                 Email = user.Email,
                 Phone = user.Phone,
 
@@ -191,8 +210,12 @@ namespace JSEA_Application.Services.Profile
                 AccessibilityNeeds = profile?.AccessibilityNeeds,
 
                 TravelStyle = travelStyle,
-                Point = profile?.RewardPoints ?? 0
+                Point = points
             };
         }
+
+        private static bool IsPortalRole(string role) =>
+            string.Equals(role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, AppRoles.Staff, StringComparison.OrdinalIgnoreCase);
     }
 }

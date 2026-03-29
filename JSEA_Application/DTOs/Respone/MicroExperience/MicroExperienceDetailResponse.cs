@@ -67,4 +67,7 @@ public class MicroExperienceDetailResponse
 
     /// <summary>Kinh độ (WGS84).</summary>
     public double? Longitude { get; set; }
+
+    /// <summary>Ảnh experience (experience_photos).</summary>
+    public List<ExperiencePhotoResponse>? Photos { get; set; }
 }

@@ -8,7 +8,7 @@ Tài liệu **chuẩn hoá** cho portal JourneySense: backend, **CORS**, **JWT**
 
 **CORS (backend):** `JSEA.Presentation/appsettings.json` → `Cors:AllowedOrigins` (mặc định `http://localhost:5173`). Thêm origin production khi deploy.
 
-**DB:** cột `feedbacks.moderation_status` — migration `20260326120000_AddFeedbackModerationStatus` hoặc SQL tương đương. **Khẩn cấp** không còn bảng: dùng **Goong Places** realtime (`POST /api/emergency/nearby`). Migration `20260329120000_DropEmergencyPlacesTable` xoá bảng `emergency_places` nếu từng tạo; có thể bỏ qua trên DB mới.
+**DB:** cột `feedbacks.moderation_status` — migration `20260326120000_AddFeedbackModerationStatus` hoặc SQL tương đương. Cột `journeys.journey_feedback_moderation_status` — migration `20260330120000_AddJourneyFeedbackModerationStatus` (mặc định `approved`; text journey feedback mới thường `pending` sau khi user lưu). **Khẩn cấp** không còn bảng: dùng **Goong Places** realtime (`POST /api/emergency/nearby`). Migration `20260329120000_DropEmergencyPlacesTable` xoá bảng `emergency_places` nếu từng tạo; có thể bỏ qua trên DB mới.
 
 **Test admin:** `UPDATE users SET role = 'admin' WHERE email = '...';` rồi login.
 
@@ -24,19 +24,58 @@ Tài liệu **chuẩn hoá** cho portal JourneySense: backend, **CORS**, **JWT**
 | 4 | `POST` | `/api/admin/staff-accounts` | `admin` — `{ "email", "password" }` |
 | 5 | `GET` | `/api/admin/analytics/summary` | `admin` |
 | 6 | `GET` | `/api/admin/audit-logs` | `admin` — query `userId`, `actionType`, `entityType`, `fromUtc`, `toUtc`, `page`, `pageSize` |
-| 7 | `GET` | `/api/staff/feedbacks` | `admin`, `staff` |
-| 8 | `GET` | `/api/staff/feedbacks/{feedbackId}` | `admin`, `staff` |
-| 9 | `POST` | `/api/staff/feedbacks/{feedbackId}/moderate` | `admin`, `staff` — `{ "decision": "approve"\|"reject", "reason"?: "..." }` |
-| 10 | `POST` | `/api/staff/reports/users/{userId}` | `admin`, `staff` — `{ "reason", "relatedFeedbackId"?: guid }` |
-| 11 | `POST` | `/api/admin/embeddings/generate` | `admin` |
+| 7 | `GET` | `/api/staff/feedbacks/journeys` | `admin`, `staff` — **feedback cả chuyến** (`journeys.journey_feedback`); query `moderationStatus`, `page`, `pageSize` |
+| 8 | `POST` | `/api/staff/feedbacks/journeys/{journeyId}/moderate` | `admin`, `staff` — cùng body như duyệt waypoint: `{ "decision": "approve"\|"reject", "reason"?: "..." }` → `204` |
+| 9 | `GET` | `/api/staff/feedbacks` | `admin`, `staff` — **feedback waypoint** (bảng `feedbacks`); query `moderationStatus`, `experienceId`, `page`, `pageSize` |
+| 10 | `GET` | `/api/staff/feedbacks/{feedbackId}` | `admin`, `staff` |
+| 11 | `POST` | `/api/staff/feedbacks/{feedbackId}/moderate` | `admin`, `staff` — `{ "decision": "approve"\|"reject", "reason"?: "..." }` |
+| 12 | `POST` | `/api/staff/reports/users/{userId}` | `admin`, `staff` — `{ "reason", "relatedFeedbackId"?: guid }` |
+| 13 | `POST` | `/api/admin/embeddings/generate` | `admin` |
 | — | `POST` | `/api/auth/login` | Không — `{ "email", "password" }` |
+| — | `GET` | `/api/profile` | **`admin`**, **`staff`**, **`traveler`** — JWT; xem mục **Profile** bên dưới |
+| — | `PUT` | `/api/profile` | **`admin`**, **`staff`**, **`traveler`** — cập nhật họ tên, ảnh, bio, SĐT… |
 | — | `GET` | `/api/micro-experiences` | **Không bắt buộc** JWT |
 | — | `POST` / `PUT` / `DELETE` | `/api/micro-experiences` | Chỉ **`staff`** |
 | — | `POST` | `/api/emergency/nearby` | **`traveler`** — `{ "type", "latitude", "longitude", "radiusMeters"?, "maxResults"?, "vehicleType"?, "placeKeyword"? }` |
 
 **Login response (JSON):** `userId`, `email`, `role`, `accessToken`, `refreshToken`.
 
-**Feedback:** mới từ mobile → `moderation_status = pending`; RAG/`SuggestService` chỉ dùng feedback **`approved`**; duyệt qua API (9).
+**Feedback waypoint:** mới từ mobile → `feedbacks.moderation_status = pending`; RAG/`SuggestService` chỉ dùng feedback **`approved`**; staff duyệt qua API **(11)**.
+
+**Feedback cả chuyến:** text trong `journeys.journey_feedback` có `journey_feedback_moderation_status` (`pending` \| `approved` \| `rejected`). Web staff xem hàng chờ **(7)** và duyệt **(8)**. (Khác với danh sách **(9)** dành cho từng waypoint.)
+
+**Journey + feedback lồng nhau (mobile / chi tiết chuyến):** `GET /api/journeys/{id}` (JWT traveler chủ chuyến) trả `journeyFeedback`, `journeyFeedbackModerationStatus`, và trong `waypoints[]` có `visitFeedback` khi đã check-in. Staff xem một bản ghi waypoint: `GET /api/staff/feedbacks/{id}` kèm `journeyId`, `journeyFeedback`, `journeyFeedbackModerationStatus`, `waypointStopOrder`.
+
+**Mobile — chi tiết gợi ý (không thuộc portal web):** `GET /api/journeys/suggestions/{suggestionId}/community` — metrics địa điểm + feedback công khai đã duyệt.
+
+---
+
+## Profile cá nhân (`/api/profile`) — làm màn hồ sơ admin & staff
+
+Cùng endpoint với mobile traveler; backend **phân biệt theo `users.role`** trong JWT.
+
+### `GET /api/profile`
+
+Header: `Authorization: Bearer <accessToken>`.
+
+**Luôn có trong JSON:** `userId`, `role` (`admin` \| `staff` \| `traveler`), `email`, `phone`, `fullName`, `avatarUrl`, `bio`, `accessibilityNeeds` (các field có thể `null` tùy dữ liệu).
+
+**Chỉ `traveler`:** thêm `travelStyle` (mảng vibe) và `point` (điểm thưởng, số nguyên).
+
+**`admin` và `staff`:** **không** trả hai field `travelStyle` và `point` (JSON bỏ hẳn property, không phải `null`), vì portal không dùng travel vibe / điểm thưởng.
+
+### `PUT /api/profile`
+
+Body (tất cả optional trừ quy tắc traveler bên dưới): `fullName`, `phone`, `avatarUrl`, `bio`, `accessibilityNeeds`, `travelStyle` (mảng enum).
+
+- **`admin` / `staff`:** có thể đổi họ tên, avatar, bio, SĐT… **Không** bắt chọn travel style lần đầu. Nếu client gửi `travelStyle`, backend **bỏ qua** (không lưu, không gọi Gemini).
+- **`traveler`:** như tài liệu mobile — nếu trong DB chưa có travel style thì lần đầu **bắt buộc** gửi ít nhất một vibe; các lần sau `travelStyle` optional.
+
+### Gợi ý FE portal (React)
+
+- Sau login đã có `role` trong response; có thể gọi `GET /api/profile` để đồng bộ đầy đủ + cập nhật Redux.
+- Trang **Profile** admin/staff: **không** hiển thị form / section travel style và điểm; chỉ đọc các field còn lại.
+- TypeScript: type response profile nên có `travelStyle?` và `point?` optional để khớp JSON thực tế.
 
 ---
 
@@ -45,8 +84,9 @@ Tài liệu **chuẩn hoá** cho portal JourneySense: backend, **CORS**, **JWT**
 | Hạng mục | Trạng thái |
 |----------|------------|
 | JWT + phân quyền portal | Đã có |
+| Profile `GET/PUT /api/profile` — admin/staff không có `travelStyle`/`point`, có `role` | Đã có |
 | Admin: users, staff-accounts, analytics, audit, embeddings | Đã có |
-| Staff/Admin: feedbacks, moderate, report user | Đã có |
+| Staff/Admin: feedback waypoint + **feedback cả chuyến** (`/feedbacks/journeys`), moderate, report user | Đã có |
 | Micro-experience: GET public; ghi chỉ `staff`; admin xem + chạy embedding | Đã có |
 | Khẩn cấp: Goong AutoComplete + Place Detail qua `POST /api/emergency/nearby` | Đã có |
 | DTO địa điểm: Tags, RichDescription, OpeningHours, PriceRange, CrowdLevel, AmenityTags + regenerate embedding | Đã có |
@@ -58,9 +98,12 @@ Tài liệu **chuẩn hoá** cho portal JourneySense: backend, **CORS**, **JWT**
 
 - **GET** `/api/micro-experiences` — query: `keyword`, `categoryId`, `status`, `mood`, `timeOfDay`
 - **GET** `/api/micro-experiences/{id}`
-- **POST** `/api/micro-experiences` — JWT **staff**; body gồm `name`, `categoryId`, `accessibleBy`, …; `richDescription`, `tags`, `amenityTags`, … cho embedding.
-- **PUT** `/api/micro-experiences/{id}` — JWT **staff**
+- **POST** `/api/micro-experiences` — JWT **staff**; body gồm `name`, `categoryId`, `accessibleBy`, …; `richDescription`, `tags`, `amenityTags`, … cho embedding; tuỳ chọn **`photos`** (URL).
+- **PUT** `/api/micro-experiences/{id}` — JWT **staff**; tuỳ chọn **`photos`** (append).
+- **POST** `/api/micro-experiences/{id}/photos` — JWT **staff**, `multipart/form-data` (`file`, `caption?`, `isCover?`).
+- **DELETE** `/api/micro-experiences/{id}/photos/{photoId}` — JWT **staff**.
 - **DELETE** `/api/micro-experiences/{id}` — JWT **staff**
+- Chi tiết payload & ảnh cho FE: **`docs/MICRO_EXPERIENCE_FE.md`**
 - **GET** `/api/categories` — danh mục (thường public).
 
 ### Khẩn cấp (mobile)
@@ -279,6 +322,7 @@ Gợi ý typing: `useSelector` / `useDispatch` với `RootState` và `ThunkDispa
 4. Trang staff: list micro-experiences (GET có thể không token), form create/update (JWT staff).
 5. Trang admin: users, analytics, audit, embedding — thêm reducers/actions từng module khi cần.
 6. Feedback: thunk + reducer list hoặc state local.
+7. **Profile:** `GET/PUT /api/profile` — layout admin/staff bỏ travel style & điểm; dùng `role` từ response.
 
 ---
 

@@ -22,6 +22,20 @@ public interface IStaffFeedbackService
         string? userAgent,
         CancellationToken cancellationToken = default);
 
+    Task<PortalPagedResult<StaffJourneyFeedbackListItemDto>> ListJourneyFeedbacksAsync(
+        string? moderationStatus,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Ok, string? Error)> ModerateJourneyFeedbackAsync(
+        Guid actorUserId,
+        Guid journeyId,
+        ModerateFeedbackRequest request,
+        IPAddress? ip,
+        string? userAgent,
+        CancellationToken cancellationToken = default);
+
     Task<(bool Ok, string? Error)> ReportUserAsync(
         Guid actorUserId,
         Guid targetUserId,

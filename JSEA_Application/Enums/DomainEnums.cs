@@ -26,6 +26,7 @@ public enum ActionType
     AdminUserStatusChanged,
     AdminStaffCreated,
     StaffFeedbackModerated,
+    StaffJourneyFeedbackModerated,
     StaffUserReported,
     AdminEmbeddingBatchRun
 }

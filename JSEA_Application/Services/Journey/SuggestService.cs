@@ -1,4 +1,4 @@
-﻿using JSEA_Application.DTOs.Respone.Journey;
+using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
 using JSEA_Application.Enums;
@@ -330,6 +330,69 @@ namespace JSEA_Application.Services.Journey
             await _journeyRepository.UpdateSuggestionInsightAsync(suggestionId, insight, cancellationToken);
 
             return insight;
+        }
+
+        public async Task<SuggestionCommunityResponse?> GetSuggestionCommunityAsync(
+            Guid suggestionId,
+            Guid viewerTravelerId,
+            int page,
+            int pageSize,
+            CancellationToken cancellationToken = default)
+        {
+            var suggestion = await _journeyRepository.GetSuggestionByIdAsync(suggestionId, cancellationToken);
+            if (suggestion?.Journey == null)
+                return null;
+
+            if (suggestion.Journey.TravelerId != viewerTravelerId)
+                return null;
+
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, 50);
+
+            var exp = suggestion.Experience;
+            var m = exp.ExperienceMetric;
+
+            // Không loại feedback của chính viewer: “cộng đồng” = mọi bình luận đã duyệt tại địa điểm,
+            // kể cả của người đang xem (tránh list rỗng khi chỉ có 1 người đã review).
+            var (items, total) = await _feedbackRepository.ListPublicApprovedForExperienceAsync(
+                exp.Id,
+                excludeTravelerId: null,
+                page,
+                pageSize,
+                cancellationToken);
+
+            static string? DisplayName(UserProfile? p)
+            {
+                var n = p?.FullName;
+                return string.IsNullOrWhiteSpace(n) ? null : n.Trim();
+            }
+
+            var feedbacks = items
+                .Select(f => new PublicExperienceFeedbackItemDto
+                {
+                    FeedbackId = f.Id,
+                    Text = f.FeedbackText,
+                    CreatedAt = f.CreatedAt,
+                    Stars = f.Visit?.Rating != null ? f.Visit.Rating.Rating1 : null,
+                    AuthorDisplayName = DisplayName(f.Visit?.Traveler?.UserProfile)
+                })
+                .ToList();
+
+            return new SuggestionCommunityResponse
+            {
+                ExperienceId = exp.Id,
+                ExperienceName = exp.Name,
+                Metrics = new ExperienceSocialMetricsDto
+                {
+                    TotalVisits = m?.TotalVisits,
+                    TotalRatings = m?.TotalRatings,
+                    AvgRating = m?.AvgRating
+                },
+                Feedbacks = feedbacks,
+                Page = page,
+                PageSize = pageSize,
+                TotalFeedbacks = total
+            };
         }
 
         // =========================================================

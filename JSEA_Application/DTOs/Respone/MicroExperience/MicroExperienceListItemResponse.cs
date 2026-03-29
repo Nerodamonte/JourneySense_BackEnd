@@ -25,4 +25,7 @@ public class MicroExperienceListItemResponse
 
     /// <summary>Kinh độ (WGS84) để vẽ trên bản đồ.</summary>
     public double? Longitude { get; set; }
+
+    /// <summary>URL ảnh bìa hoặc ảnh đầu tiên (nếu có).</summary>
+    public string? CoverPhotoUrl { get; set; }
 }

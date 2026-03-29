@@ -593,6 +593,14 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("vehicle_type");
 
+                    b.Property<string>("JourneyFeedbackModerationStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("journey_feedback_moderation_status")
+                        .HasDefaultValue("approved");
+
                     b.HasKey("Id")
                         .HasName("journeys_pkey");
 
