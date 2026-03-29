@@ -1,4 +1,4 @@
-﻿using JSEA_Application.DTOs.Request.Profile;
+using JSEA_Application.DTOs.Request.Profile;
 using JSEA_Application.DTOs.Respone.Profile;
 using JSEA_Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -22,8 +22,8 @@ namespace JSEA_Presentation.Controllers
 
         /// <summary>
         /// Cập nhật profile user.
-        /// TravelStyle optional khi update bình thường; nhưng nếu user chưa có TravelStyle trong DB (lần đầu)
-        /// thì bắt buộc truyền ít nhất 1 để generate travel_style_text phục vụ suggest pipeline.
+        /// Traveler: TravelStyle optional khi đã có trong DB; lần đầu bắt buộc ít nhất 1 vibe để generate travel_style_text.
+        /// Admin/Staff: TravelStyle trong body bị bỏ qua (portal không dùng).
         /// Các field khác có thể bỏ trống.
         /// </summary>
         [HttpPut]
@@ -49,10 +49,17 @@ namespace JSEA_Presentation.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+            catch (UnauthorizedAccessException)
+            {
+                return Unauthorized(new { message = "Vui lòng đăng nhập." });
+            }
 
             return Ok(new { message = "Cập nhật profile thành công." });
         }
 
+        /// <summary>
+        /// Admin/Staff: JSON không gồm travelStyle và point (chỉ dành cho traveler).
+        /// </summary>
         [HttpGet]
         [ProducesResponseType(typeof(ProfileResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]

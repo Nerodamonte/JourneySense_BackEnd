@@ -17,4 +17,17 @@ public class PlaceDetailResponse
 
     /// <summary>Kinh độ (WGS84).</summary>
     public double? Longitude { get; set; }
+
+    public string? FormattedPhoneNumber { get; set; }
+
+    public string? InternationalPhoneNumber { get; set; }
+
+    public double? Rating { get; set; }
+
+    public int? UserRatingsTotal { get; set; }
+
+    /// <summary>Giờ mở cửa (text), nếu Goong trả weekday_text hoặc open_now.</summary>
+    public string? OpeningHoursSummary { get; set; }
+
+    public bool? OpenNow { get; set; }
 }

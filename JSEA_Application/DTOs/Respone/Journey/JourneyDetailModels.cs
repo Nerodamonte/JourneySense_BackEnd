@@ -17,6 +17,18 @@ public class RouteSegmentResponse
     public bool? IsCulturalArea { get; set; }
 }
 
+/// <summary>Feedback + rating gắn với lần check-in (visit) tại waypoint — lồng trong chi tiết journey.</summary>
+public class JourneyWaypointVisitFeedbackResponse
+{
+    public Guid VisitId { get; set; }
+    public Guid? FeedbackId { get; set; }
+    public string? FeedbackText { get; set; }
+    public string? ModerationStatus { get; set; }
+    public DateTime? FeedbackCreatedAt { get; set; }
+    /// <summary>Điểm đánh giá 1–5 (nếu có) cùng visit.</summary>
+    public int? Rating { get; set; }
+}
+
 public class JourneyWaypointResponse
 {
     public Guid WaypointId { get; set; }
@@ -36,4 +48,7 @@ public class JourneyWaypointResponse
 
     public int? DetourDistanceMeters { get; set; }
     public int? DetourTimeMinutes { get; set; }
+
+    /// <summary>Thông tin check-in + feedback waypoint (null nếu chưa ghé).</summary>
+    public JourneyWaypointVisitFeedbackResponse? VisitFeedback { get; set; }
 }

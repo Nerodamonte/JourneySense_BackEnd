@@ -220,6 +220,7 @@ public class GoongMapsService : IGoongMapsService
         double? latitude,
         double? longitude,
         int limit,
+        int? radiusMeters = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(input))
@@ -234,6 +235,8 @@ public class GoongMapsService : IGoongMapsService
         var url = $"{baseUrl}Place/AutoComplete?api_key={Uri.EscapeDataString(key)}&input={Uri.EscapeDataString(input.Trim())}";
         if (latitude.HasValue && longitude.HasValue)
             url += $"&location={latitude.Value:G},{longitude.Value:G}";
+        if (radiusMeters is > 0)
+            url += $"&radius={radiusMeters.Value}";
         if (limit > 0 && limit <= 20)
             url += $"&limit={limit}";
         else
@@ -313,13 +316,48 @@ public class GoongMapsService : IGoongMapsService
             if (loc.TryGetProperty("lng", out var lngEl)) lng = lngEl.GetDouble();
         }
 
+        double? rating = null;
+        if (result.TryGetProperty("rating", out var ratingEl))
+            rating = ratingEl.GetDouble();
+
+        int? userRatingsTotal = null;
+        if (result.TryGetProperty("user_ratings_total", out var urtEl) && urtEl.ValueKind == JsonValueKind.Number)
+            userRatingsTotal = urtEl.GetInt32();
+
+        string? phone = null;
+        if (result.TryGetProperty("formatted_phone_number", out var fpEl))
+            phone = fpEl.GetString();
+        string? intlPhone = null;
+        if (result.TryGetProperty("international_phone_number", out var ipEl))
+            intlPhone = ipEl.GetString();
+
+        string? hoursSummary = null;
+        bool? openNow = null;
+        if (result.TryGetProperty("opening_hours", out var oh))
+        {
+            if (oh.TryGetProperty("open_now", out var onEl))
+                openNow = onEl.GetBoolean();
+            if (oh.TryGetProperty("weekday_text", out var wt) && wt.ValueKind == JsonValueKind.Array)
+            {
+                var lines = wt.EnumerateArray().Select(e => e.GetString()).Where(s => !string.IsNullOrEmpty(s)).ToList();
+                if (lines.Count > 0)
+                    hoursSummary = string.Join("; ", lines!);
+            }
+        }
+
         return new PlaceDetailResponse
         {
             PlaceId = placeIdOut ?? placeId.Trim(),
             Name = name,
             FormattedAddress = formattedAddress,
             Latitude = lat,
-            Longitude = lng
+            Longitude = lng,
+            FormattedPhoneNumber = phone,
+            InternationalPhoneNumber = intlPhone,
+            Rating = rating,
+            UserRatingsTotal = userRatingsTotal,
+            OpeningHoursSummary = hoursSummary,
+            OpenNow = openNow
         };
     }
 

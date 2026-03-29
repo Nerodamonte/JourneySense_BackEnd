@@ -90,6 +90,11 @@ public partial class Journey
     [Column("journey_feedback")]
     public string? JourneyFeedback { get; set; }
 
+    /// <summary>pending | approved | rejected — chỉ approved hiển thị công khai (share / viewer không phải chủ chuyến).</summary>
+    [Column("journey_feedback_moderation_status")]
+    [StringLength(20)]
+    public string JourneyFeedbackModerationStatus { get; set; } = "approved";
+
     [InverseProperty("Journey")]
     public virtual ICollection<JourneyCrowdLog> JourneyCrowdLogs { get; set; } = new List<JourneyCrowdLog>();
 

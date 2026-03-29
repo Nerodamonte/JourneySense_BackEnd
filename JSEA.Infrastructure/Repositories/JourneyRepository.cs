@@ -300,6 +300,61 @@ public class JourneyRepository : IJourneyRepository
         await _context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<int?> GetStopOrderForExperienceOnJourneyAsync(
+        Guid journeyId,
+        Guid experienceId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.JourneyWaypoints
+            .AsNoTracking()
+            .Where(w => w.JourneyId == journeyId && w.ExperienceId == experienceId)
+            .OrderBy(w => w.StopOrder)
+            .Select(w => (int?)w.StopOrder)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    public async Task<(List<Journey> Items, int TotalCount)> ListJourneyFeedbacksForStaffAsync(
+        string? moderationStatus,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var q = _context.Journeys
+            .AsNoTracking()
+            .Include(j => j.Traveler)
+            .Where(j => j.JourneyFeedback != null && j.JourneyFeedback != "");
+
+        if (!string.IsNullOrWhiteSpace(moderationStatus))
+            q = q.Where(j => j.JourneyFeedbackModerationStatus == moderationStatus.Trim().ToLowerInvariant());
+
+        var total = await q.CountAsync(cancellationToken);
+        var items = await q
+            .OrderByDescending(j => j.UpdatedAt ?? j.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, total);
+    }
+
+    public async Task<bool> TryModerateJourneyFeedbackAsync(
+        Guid journeyId,
+        string moderationStatus,
+        CancellationToken cancellationToken = default)
+    {
+        var j = await _context.Journeys.FirstOrDefaultAsync(x => x.Id == journeyId, cancellationToken);
+        if (j == null || string.IsNullOrWhiteSpace(j.JourneyFeedback))
+            return false;
+
+        j.JourneyFeedbackModerationStatus = moderationStatus;
+        j.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<List<Guid>> GetInteractionSuggestionIdsAsync(
         IEnumerable<Guid> suggestionIds,
         InteractionType interactionType,
