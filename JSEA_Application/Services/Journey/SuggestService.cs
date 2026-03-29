@@ -691,16 +691,18 @@ $"https://generativelanguage.googleapis.com/v1beta/models/{GeminiEmbedModel}:emb
                 sb.AppendLine($"Mùa: {seasonVi}");
             sb.AppendLine();
 
-            // === INSTRUCTION CHAT CHE ===
+            // === INSTRUCTION: highlight keys, dễ quét mắt ===
             sb.AppendLine("=== NHIỆM VỤ ===");
-            sb.AppendLine("Bạn là một người bạn đang đưa lời khuyên. Viết 2–3 câu tiếng Việt tự nhiên, thân thiện (xưng hô 'bạn').");
-            sb.AppendLine("BẮT BUỘC nhắc đủ 4 ý sau theo đúng thứ tự, nhưng viết liền mạch (không xuống dòng, không đánh số, không bullet):");
-            sb.AppendLine("(1) Liên hệ phong cách du lịch + tâm trạng hiện tại với địa điểm này (đừng phán quá đà).");
-            sb.AppendLine("(2) Nói ngắn về thời tiết + thời điểm trong ngày có thuận để ghé không.");
-            sb.AppendLine("(3) Nhắc giá + tình trạng đông đúc (nếu có). Khi nhắc đông đúc, phải viết theo dạng 'địa điểm này ...' hoặc 'quán này ...' (không dùng cụm 'mức độ ...'). Giữ nguyên con số/đơn vị đúng như FACTS.");
-            sb.AppendLine("(4) Nhắc độ lệch tuyến: phải có đúng số mét nếu có (ví dụ 'lệch 61m'), rồi kết lại bằng một lời khuyên nhẹ nhàng.");
-            sb.AppendLine("CHỈ dùng thông tin trong FACTS, không bịa thêm chi tiết (không tự suy đoán 'chiều mây', 'nắng mưa'...).");
-            sb.AppendLine("TUYỆT ĐỐI không dùng các từ mã như quiet/normal/busy; không dùng cụm 'mức độ ...'.");
+            sb.AppendLine("Bạn là người bạn đồng hành. Tiếng Việt tự nhiên, xưng hô 'bạn'.");
+            sb.AppendLine("Định dạng BẮT BUỘC: đúng 4 dòng, mỗi dòng bắt đầu bằng '• ' (bullet + khoảng trắng). Mỗi dòng = một highlight ngắn (khoảng 1 câu, tối đa ~150 ký tự), không viết đoạn văn nối dài nhiều câu.");
+            sb.AppendLine("Giữ đúng thứ tự 4 dòng sau (mỗi dòng một ý, lược mà đủ ý):");
+            sb.AppendLine("Dòng 1 — Phong cách du lịch + tâm trạng hiện tại có hợp với địa điểm này không (không phán xét quá đà).");
+            sb.AppendLine("Dòng 2 — Thời tiết + thời điểm trong ngày: có thuận để ghé không.");
+            sb.AppendLine("Dòng 3 — Giá + đông/vắng (chỉ nếu có trong FACTS). Viết 'địa điểm này ...' hoặc 'quán này ...'; không dùng cụm 'mức độ ...'; giữ đúng số/đơn vị từ FACTS.");
+            sb.AppendLine("Dòng 4 — Độ lệch tuyến: nêu đúng số mét nếu FACTS có (vd. lệch 61m), kết bằng một gợi ý nhẹ.");
+            sb.AppendLine("Không thêm dòng thứ 5; không tiêu đề / không đánh số 1. ngoài bullet • ; không markdown đậm.");
+            sb.AppendLine("CHỈ dùng thông tin trong FACTS, không bịa thêm chi tiết.");
+            sb.AppendLine("TUYỆT ĐỐI không dùng quiet, normal, busy; không dùng cụm 'mức độ ...'.");
             return sb.ToString();
         }
 
@@ -725,8 +727,18 @@ $"https://generativelanguage.googleapis.com/v1beta/models/{GeminiEmbedModel}:emb
                 text = text.Trim();
             }
 
-            // Collapse excessive whitespace.
-            text = string.Join(' ', text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries));
+            static string CollapseSpaces(string line) =>
+                string.Join(' ', line.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+            // Giữ xuống dòng giữa các highlight; thu gọn khoảng trắng trong từng dòng.
+            var lines = text
+                .Split(new[] { "\r\n", "\n", "\r" }, StringSplitOptions.None)
+                .Select(CollapseSpaces)
+                .Where(l => l.Length > 0)
+                .ToList();
+            text = lines.Count > 0
+                ? string.Join('\n', lines)
+                : CollapseSpaces(text);
 
             // Guardrail: if the model still outputs 'mức độ ...', rewrite to natural subject phrasing.
             text = text.Replace("mức độ không đông khách lắm", "địa điểm này không đông khách lắm", StringComparison.OrdinalIgnoreCase);
