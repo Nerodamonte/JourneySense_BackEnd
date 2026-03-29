@@ -8,13 +8,14 @@ namespace JSEA_Application.Interfaces;
 public interface IGoongMapsService
 {
     /// <summary>
-    /// Gợi ý địa điểm theo từ khóa (Goong Place AutoComplete). Có thể truyền location để ưu tiên kết quả gần.
+    /// Gợi ý địa điểm theo từ khóa (Goong Place AutoComplete). Có thể truyền location + radius (m) để giới hạn khu vực.
     /// </summary>
     Task<List<PlaceSuggestionResponse>> SearchPlaceSuggestionsAsync(
         string input,
         double? latitude,
         double? longitude,
         int limit,
+        int? radiusMeters = null,
         CancellationToken cancellationToken = default);
     /// <summary>
     /// Phân tích tuyến từ địa chỉ đi → đến: geocode, direction, trả về danh sách RouteContext (tối đa MaxRouteAlternatives).

@@ -1,15 +1,16 @@
 using JSEA_Application.Enums;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Text.Json.Serialization;
 
 namespace JSEA_Application.DTOs.Respone.Profile
 {
     public class ProfileResponse
     {
         public Guid UserId { get; set; }
+
+        /// <summary>Khớp JWT/DB: admin | staff | traveler</summary>
+        public string Role { get; set; } = null!;
 
         public string? Email { get; set; }
         public string? Phone { get; set; }
@@ -19,9 +20,12 @@ namespace JSEA_Application.DTOs.Respone.Profile
         public string? Bio { get; set; }
         public string? AccessibilityNeeds { get; set; }
 
-        public List<VibeType> TravelStyle { get; set; } = new();
+        /// <summary>Chỉ traveler; admin/staff không trả field này (JSON bỏ qua khi null).</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<VibeType>? TravelStyle { get; set; }
 
-        public int Point { get; set; }
-
+        /// <summary>Điểm thưởng — chỉ traveler; admin/staff không trả field này.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public int? Point { get; set; }
     }
 }

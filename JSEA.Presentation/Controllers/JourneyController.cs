@@ -1,6 +1,6 @@
 using JSEA_Application.DTOs.Request.Journey;
-using JSEA_Application.DTOs.Request.JourneyProgress;
 using JSEA_Application.DTOs.Respone.Journey;
+using JSEA_Application.DTOs.Request.JourneyProgress;
 using JSEA_Application.DTOs.Respone.JourneyProgress;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Enums;
@@ -75,7 +75,12 @@ public class JourneyController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var detail = await _journeyService.GetByIdAsync(id, cancellationToken);
+        Guid? viewerId = null;
+        if (User?.Identity?.IsAuthenticated == true &&
+            Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var uid))
+            viewerId = uid;
+
+        var detail = await _journeyService.GetByIdAsync(id, viewerId, cancellationToken);
         if (detail == null)
             return NotFound(new { message = "Không tìm thấy hành trình." });
         return Ok(detail);
@@ -206,6 +211,38 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
+    /// Khi xem chi tiết gợi ý: metrics địa điểm (experience_metrics) + feedback đã duyệt từ người khác (có sao nếu có rating).
+    /// Chỉ chủ journey của suggestion này mới gọi được.
+    /// </summary>
+    [HttpGet("suggestions/{suggestionId:guid}/community")]
+    [Authorize]
+    [ProducesResponseType(typeof(SuggestionCommunityResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetSuggestionCommunity(
+        Guid suggestionId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var result = await _suggestService.GetSuggestionCommunityAsync(
+            suggestionId,
+            travelerId,
+            page,
+            pageSize,
+            cancellationToken);
+
+        if (result == null)
+            return NotFound(new { message = "Không tìm thấy gợi ý hoặc bạn không có quyền xem." });
+
+        return Ok(result);
+    }
+
+    /// <summary>
     /// User chọn các điểm muốn ghé (waypoints) sau khi xem suggestions.
     /// Replace toàn bộ waypoint hiện tại của journey.
     /// </summary>
@@ -238,7 +275,7 @@ public class JourneyController : ControllerBase
             return BadRequest(new { message = "Không thể lưu waypoints (kiểm tra route/đề xuất/time budget)." });
 
         // Additive response: keep message, also return waypointId list for FE check-in/checkout.
-        var detail = await _journeyService.GetByIdAsync(journeyId, cancellationToken);
+        var detail = await _journeyService.GetByIdAsync(journeyId, travelerId, cancellationToken);
 
         return Ok(new SaveWaypointsResponse
         {

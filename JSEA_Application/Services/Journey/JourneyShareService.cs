@@ -1,3 +1,4 @@
+using JSEA_Application.Constants;
 using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
@@ -195,6 +196,10 @@ public class JourneyShareService : IJourneyShareService
             visitByExperienceId.TryGetValue(w.ExperienceId, out var visit);
             var feedback = visit?.Feedback;
             var rating = visit?.Rating;
+            var waypointFbApproved = feedback == null || string.Equals(
+                feedback.ModerationStatus,
+                FeedbackModerationStatuses.Approved,
+                StringComparison.OrdinalIgnoreCase);
 
             waypointResponses.Add(new PublicSharedJourneyWaypointResponse
             {
@@ -216,10 +221,15 @@ public class JourneyShareService : IJourneyShareService
                 ActualArrivalAt = w.ActualArrivalAt,
                 ActualDepartureAt = w.ActualDepartureAt,
                 RatingValue = rating?.Rating1,
-                FeedbackText = feedback?.FeedbackText,
-                FeedbackCreatedAt = feedback?.CreatedAt
+                FeedbackText = waypointFbApproved ? feedback?.FeedbackText : null,
+                FeedbackCreatedAt = waypointFbApproved ? feedback?.CreatedAt : null
             });
         }
+
+        var journeyFbPublic = string.Equals(
+            j.JourneyFeedbackModerationStatus,
+            FeedbackModerationStatuses.Approved,
+            StringComparison.OrdinalIgnoreCase);
 
         return new PublicSharedJourneyDetailResponse
         {
@@ -233,7 +243,7 @@ public class JourneyShareService : IJourneyShareService
             StartedAt = j.StartedAt,
             CompletedAt = j.CompletedAt,
             ViewCount = row.ViewCount,
-            JourneyFeedback = j.JourneyFeedback,
+            JourneyFeedback = journeyFbPublic ? j.JourneyFeedback : null,
             Waypoints = waypointResponses
         };
     }

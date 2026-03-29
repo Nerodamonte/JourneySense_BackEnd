@@ -1,6 +1,9 @@
 using JSEA_Application.DTOs.Request.MicroExperience;
 using JSEA_Application.DTOs.Respone.MicroExperience;
 using JSEA_Application.Interfaces;
+using JSEA_Application.Models;
+using JSEA_Application.Services.Journey;
+using NetTopologySuite.Geometries;
 using System.Text.RegularExpressions;
 using ExperienceEntity = JSEA_Application.Models.Experience;
 
@@ -11,15 +14,21 @@ public class MicroExperienceService : IMicroExperienceService
     private readonly IMicroExperienceRepository _repository;
     private readonly ICategoryRepository _categoryRepository;
     private readonly IGoongMapsService _goongMapsService;
+    private readonly EmbeddingGeneratorService _embeddingGenerator;
+    private readonly IExperiencePhotoStorage _photoStorage;
 
     public MicroExperienceService(
         IMicroExperienceRepository repository,
         ICategoryRepository categoryRepository,
-        IGoongMapsService goongMapsService)
+        IGoongMapsService goongMapsService,
+        EmbeddingGeneratorService embeddingGenerator,
+        IExperiencePhotoStorage photoStorage)
     {
         _repository = repository;
         _categoryRepository = categoryRepository;
         _goongMapsService = goongMapsService;
+        _embeddingGenerator = embeddingGenerator;
+        _photoStorage = photoStorage;
     }
 
     public async Task<List<MicroExperienceListItemResponse>> GetListAsync(MicroExperienceFilter filter, CancellationToken cancellationToken = default)
@@ -35,7 +44,12 @@ public class MicroExperienceService : IMicroExperienceService
             Status = x.Status,
             PreferredTimes = x.PreferredTimes,
             Latitude = x.Location?.Y,
-            Longitude = x.Location?.X
+            Longitude = x.Location?.X,
+            CoverPhotoUrl = x.ExperiencePhotos?
+                .OrderByDescending(p => p.IsCover == true)
+                .ThenBy(p => p.UploadedAt)
+                .Select(p => p.PhotoUrl)
+                .FirstOrDefault()
         }).ToList();
     }
 
@@ -54,8 +68,13 @@ public class MicroExperienceService : IMicroExperienceService
         if (await _repository.ExistsBySlugAsync(slug, cancellationToken))
             return null;
 
-        var fullAddress = BuildFullAddress(request.Address, request.City, request.Country ?? "Vietnam");
-        var location = await _goongMapsService.GeocodeAddressToPointAsync(fullAddress, cancellationToken);
+        var location = await ResolveLocationAsync(
+            request.Latitude,
+            request.Longitude,
+            request.Address,
+            request.City,
+            request.Country ?? "Vietnam",
+            cancellationToken);
         if (location == null)
             return null;
 
@@ -77,11 +96,15 @@ public class MicroExperienceService : IMicroExperienceService
             WeatherSuitability = request.WeatherSuitability,
             Seasonality = request.Seasonality,
             AmenityTags = request.AmenityTags,
+            Tags = request.Tags,
             Status = "active"
         };
 
         var saved = await _repository.SaveAsync(entity, cancellationToken);
+        await ApplyExperienceDetailAsync(saved.Id, request.RichDescription, request.OpeningHours, request.PriceRange, request.CrowdLevel, cancellationToken);
+        await ApplyPhotoInputsIfAnyAsync(saved.Id, request.Photos, cancellationToken);
         saved = await _repository.GetByIdAsync(saved.Id, cancellationToken)!;
+        await _embeddingGenerator.RegenerateEmbeddingForExperienceAsync(saved!.Id, cancellationToken);
         return MapToDetailResponse(saved!);
     }
 
@@ -110,16 +133,76 @@ public class MicroExperienceService : IMicroExperienceService
             entity.AccessibleBy = request.AccessibleBy;
         if (request.AmenityTags != null)
             entity.AmenityTags = request.AmenityTags;
+        if (request.Tags != null)
+            entity.Tags = request.Tags;
 
-        var fullAddress = BuildFullAddress(request.Address, entity.City, entity.Country ?? "Vietnam");
-        var location = await _goongMapsService.GeocodeAddressToPointAsync(fullAddress, cancellationToken);
+        var location = await ResolveLocationAsync(
+            request.Latitude,
+            request.Longitude,
+            request.Address,
+            entity.City,
+            entity.Country ?? "Vietnam",
+            cancellationToken);
         if (location == null)
             return null;
         entity.Location = location;
 
         var updated = await _repository.SaveAsync(entity, cancellationToken);
+        await MergeExperienceDetailOnUpdateAsync(updated, request, cancellationToken);
+        await ApplyPhotoInputsIfAnyAsync(updated.Id, request.Photos, cancellationToken);
         updated = await _repository.GetByIdAsync(updated.Id, cancellationToken)!;
+        await _embeddingGenerator.RegenerateEmbeddingForExperienceAsync(updated!.Id, cancellationToken);
         return MapToDetailResponse(updated!);
+    }
+
+    public async Task<ExperiencePhotoResponse?> UploadPhotoAsync(
+        Guid experienceId,
+        Stream fileStream,
+        string contentType,
+        string fileName,
+        string? caption,
+        bool isCover,
+        Guid? createdByUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (await _repository.GetByIdAsync(experienceId, cancellationToken) == null)
+            return null;
+
+        var url = await _photoStorage.SavePhotoAsync(experienceId, fileStream, contentType, fileName, cancellationToken);
+        var rows = await _repository.AddExperiencePhotosAsync(experienceId, new List<ExperiencePhoto>
+        {
+            new()
+            {
+                PhotoUrl = url,
+                ThumbnailUrl = null,
+                Caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim(),
+                IsCover = isCover,
+                CreatedByUserId = createdByUserId
+            }
+        }, cancellationToken);
+
+        var p = rows[0];
+        return new ExperiencePhotoResponse
+        {
+            Id = p.Id,
+            PhotoUrl = p.PhotoUrl,
+            ThumbnailUrl = p.ThumbnailUrl,
+            Caption = p.Caption,
+            IsCover = p.IsCover == true,
+            UploadedAt = p.UploadedAt
+        };
+    }
+
+    public async Task<bool> DeletePhotoAsync(Guid experienceId, Guid photoId, CancellationToken cancellationToken = default)
+    {
+        var photo = await _repository.GetPhotoAsync(experienceId, photoId, cancellationToken);
+        if (photo == null)
+            return false;
+        var url = photo.PhotoUrl;
+        var ok = await _repository.DeleteExperiencePhotoAsync(experienceId, photoId, cancellationToken);
+        if (ok)
+            await _photoStorage.TryDeleteStoredFileAsync(url, cancellationToken);
+        return ok;
     }
 
     public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
@@ -132,11 +215,86 @@ public class MicroExperienceService : IMicroExperienceService
         return true;
     }
 
+    private static bool HasAnyDetailInput(string? rich, string? hours, string? price, string? crowd) =>
+        !string.IsNullOrWhiteSpace(rich) || !string.IsNullOrWhiteSpace(hours) ||
+        !string.IsNullOrWhiteSpace(price) || !string.IsNullOrWhiteSpace(crowd);
+
+    private async Task ApplyExperienceDetailAsync(
+        Guid experienceId,
+        string? richDescription,
+        string? openingHours,
+        string? priceRange,
+        string? crowdLevel,
+        CancellationToken cancellationToken)
+    {
+        if (!HasAnyDetailInput(richDescription, openingHours, priceRange, crowdLevel))
+            return;
+
+        var crowd = string.IsNullOrWhiteSpace(crowdLevel) ? "normal" : crowdLevel.Trim().ToLowerInvariant();
+        await _repository.UpsertExperienceDetailAsync(new ExperienceDetail
+        {
+            ExperienceId = experienceId,
+            RichDescription = string.IsNullOrWhiteSpace(richDescription) ? null : richDescription.Trim(),
+            OpeningHours = string.IsNullOrWhiteSpace(openingHours) ? null : openingHours.Trim(),
+            PriceRange = string.IsNullOrWhiteSpace(priceRange) ? null : priceRange.Trim(),
+            CrowdLevel = crowd
+        }, cancellationToken);
+    }
+
+    /// <summary>Cập nhật detail: chỉ trường nào có trên request thì ghi đè, còn lại giữ giá trị cũ.</summary>
+    private async Task ApplyPhotoInputsIfAnyAsync(Guid experienceId, List<ExperiencePhotoInput>? photos, CancellationToken cancellationToken)
+    {
+        if (photos == null || photos.Count == 0)
+            return;
+
+        var list = photos
+            .Where(p => !string.IsNullOrWhiteSpace(p.PhotoUrl))
+            .Select(p => new ExperiencePhoto
+            {
+                PhotoUrl = p.PhotoUrl.Trim(),
+                ThumbnailUrl = string.IsNullOrWhiteSpace(p.ThumbnailUrl) ? null : p.ThumbnailUrl.Trim(),
+                Caption = string.IsNullOrWhiteSpace(p.Caption) ? null : p.Caption.Trim(),
+                IsCover = p.IsCover
+            })
+            .ToList();
+
+        if (list.Count == 0)
+            return;
+
+        await _repository.AddExperiencePhotosAsync(experienceId, list, cancellationToken);
+    }
+
+    private async Task MergeExperienceDetailOnUpdateAsync(
+        ExperienceEntity entity,
+        UpdateMicroExperienceRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.RichDescription == null && request.OpeningHours == null && request.PriceRange == null &&
+            request.CrowdLevel == null)
+            return;
+
+        var rich = request.RichDescription ?? entity.ExperienceDetail?.RichDescription;
+        var hours = request.OpeningHours ?? entity.ExperienceDetail?.OpeningHours;
+        var price = request.PriceRange ?? entity.ExperienceDetail?.PriceRange;
+        var crowd = request.CrowdLevel ?? entity.ExperienceDetail?.CrowdLevel ?? "normal";
+        crowd = string.IsNullOrWhiteSpace(crowd) ? "normal" : crowd.Trim().ToLowerInvariant();
+
+        await _repository.UpsertExperienceDetailAsync(new ExperienceDetail
+        {
+            ExperienceId = entity.Id,
+            RichDescription = string.IsNullOrWhiteSpace(rich) ? null : rich.Trim(),
+            OpeningHours = string.IsNullOrWhiteSpace(hours) ? null : hours.Trim(),
+            PriceRange = string.IsNullOrWhiteSpace(price) ? null : price.Trim(),
+            CrowdLevel = crowd
+        }, cancellationToken);
+    }
+
     private static MicroExperienceDetailResponse MapToDetailResponse(ExperienceEntity entity)
     {
         return new MicroExperienceDetailResponse
         {
             Id = entity.Id,
+            CategoryId = entity.CategoryId,
             Name = entity.Name,
             CategoryName = entity.Category?.Name,
             RichDescription = entity.ExperienceDetail?.RichDescription,
@@ -151,8 +309,25 @@ public class MicroExperienceService : IMicroExperienceService
             WeatherSuitability = entity.WeatherSuitability,
             Seasonality = entity.Seasonality,
             AmenityTags = entity.AmenityTags,
+            Tags = entity.Tags,
+            OpeningHours = entity.ExperienceDetail?.OpeningHours,
+            PriceRange = entity.ExperienceDetail?.PriceRange,
+            CrowdLevel = entity.ExperienceDetail?.CrowdLevel,
             Latitude = entity.Location?.Y,
-            Longitude = entity.Location?.X
+            Longitude = entity.Location?.X,
+            Photos = entity.ExperiencePhotos?
+                .OrderByDescending(p => p.IsCover == true)
+                .ThenBy(p => p.UploadedAt)
+                .Select(p => new ExperiencePhotoResponse
+                {
+                    Id = p.Id,
+                    PhotoUrl = p.PhotoUrl,
+                    ThumbnailUrl = p.ThumbnailUrl,
+                    Caption = p.Caption,
+                    IsCover = p.IsCover == true,
+                    UploadedAt = p.UploadedAt
+                })
+                .ToList()
         };
     }
 
@@ -164,6 +339,28 @@ public class MicroExperienceService : IMicroExperienceService
         slug = Regex.Replace(slug, @"\s+", "-");
         slug = Regex.Replace(slug, @"-+", "-").Trim('-');
         return string.IsNullOrEmpty(slug) ? "experience" : slug;
+    }
+
+    private async Task<Point?> ResolveLocationAsync(
+        double? latitude,
+        double? longitude,
+        string? address,
+        string? city,
+        string country,
+        CancellationToken cancellationToken)
+    {
+        if (latitude.HasValue && longitude.HasValue)
+        {
+            return new Point(
+                Math.Round(longitude.Value, 6),
+                Math.Round(latitude.Value, 6))
+            {
+                SRID = 4326
+            };
+        }
+
+        var fullAddress = BuildFullAddress(address, city, country);
+        return await _goongMapsService.GeocodeAddressToPointAsync(fullAddress, cancellationToken);
     }
 
     private static string BuildFullAddress(string? address, string? city, string? country)

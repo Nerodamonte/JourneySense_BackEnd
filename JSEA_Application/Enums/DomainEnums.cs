@@ -13,7 +13,23 @@ public enum VibeType { Chill, Relax, Explorer, Foodie, LocalVibes, Adventure, Ph
 public enum CrowdLevel { All, Quiet, Normal, Busy }
 public enum VehicleType { Walking, Bicycle, Motorbike, Car }
 public enum JourneyStatus { Planning, InProgress, Completed, Cancelled }
-public enum ActionType { Create, Update, Delete, Verify, Feature, Reject, Login, Logout }
+public enum ActionType
+{
+    Create,
+    Update,
+    Delete,
+    Verify,
+    Feature,
+    Reject,
+    Login,
+    Logout,
+    AdminUserStatusChanged,
+    AdminStaffCreated,
+    StaffFeedbackModerated,
+    StaffJourneyFeedbackModerated,
+    StaffUserReported,
+    AdminEmbeddingBatchRun
+}
 public enum RecurrencePattern { Once, Daily, Weekly, Monthly, Yearly, Custom }
 public enum TimeOfDay { Morning, Afternoon, Evening, Night }
 public enum WeatherType { Sunny, Cloudy, Rainy }

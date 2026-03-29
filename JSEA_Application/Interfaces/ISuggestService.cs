@@ -1,4 +1,4 @@
-﻿using JSEA_Application.DTOs.Respone.Journey;
+using JSEA_Application.DTOs.Respone.Journey;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,6 +23,17 @@ namespace JSEA_Application.Interfaces
         /// <param name="cancellationToken"></param>
         Task<string?> GetAiInsightAsync(
             Guid suggestionId,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Metrics + danh sách feedback (người khác) cho địa điểm của suggestion.
+        /// Chỉ journey owner mới gọi được.
+        /// </summary>
+        Task<SuggestionCommunityResponse?> GetSuggestionCommunityAsync(
+            Guid suggestionId,
+            Guid viewerTravelerId,
+            int page,
+            int pageSize,
             CancellationToken cancellationToken = default);
     }
 
