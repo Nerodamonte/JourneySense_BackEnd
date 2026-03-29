@@ -16,6 +16,7 @@ public class JourneyProgressService : IJourneyProgressService
     private readonly IVisitRepository _visitRepository;
     private readonly IFeedbackRepository _feedbackRepository;
     private readonly IRatingRepository _ratingRepository;
+    private readonly IExperienceMetricRepository _experienceMetrics;
     private readonly IRewardService _rewardService;
 
     public JourneyProgressService(
@@ -23,12 +24,14 @@ public class JourneyProgressService : IJourneyProgressService
         IVisitRepository visitRepository,
         IFeedbackRepository feedbackRepository,
         IRatingRepository ratingRepository,
+        IExperienceMetricRepository experienceMetrics,
         IRewardService rewardService)
     {
         _journeyRepository = journeyRepository;
         _visitRepository = visitRepository;
         _feedbackRepository = feedbackRepository;
         _ratingRepository = ratingRepository;
+        _experienceMetrics = experienceMetrics;
         _rewardService = rewardService;
     }
 
@@ -141,6 +144,7 @@ public class JourneyProgressService : IJourneyProgressService
         if (existingVisit == null)
         {
             visit = await _visitRepository.SaveAsync(visit, cancellationToken);
+            await _experienceMetrics.IncrementVisitCountAsync(waypoint.ExperienceId, cancellationToken);
         }
         else if (request.PhotoUrls is { Count: > 0 })
         {
@@ -236,6 +240,7 @@ public class JourneyProgressService : IJourneyProgressService
         if (existingVisit == null)
         {
             visit = await _visitRepository.SaveAsync(visit, cancellationToken);
+            await _experienceMetrics.IncrementVisitCountAsync(waypoint.ExperienceId, cancellationToken);
         }
         else
         {
@@ -244,12 +249,19 @@ public class JourneyProgressService : IJourneyProgressService
         }
 
         var existingRating = await _ratingRepository.GetByVisitIdAsync(visit.Id, cancellationToken);
-        var rating = existingRating ?? await _ratingRepository.SaveAsync(new Rating
+        Rating rating;
+        if (existingRating == null)
         {
-            VisitId = visit.Id,
-            Rating1 = request.RatingValue,
-            CreatedAt = DateTime.UtcNow
-        }, cancellationToken);
+            rating = await _ratingRepository.SaveAsync(new Rating
+            {
+                VisitId = visit.Id,
+                Rating1 = request.RatingValue,
+                CreatedAt = DateTime.UtcNow
+            }, cancellationToken);
+            await _experienceMetrics.AddRatingAsync(waypoint.ExperienceId, request.RatingValue, cancellationToken);
+        }
+        else
+            rating = existingRating;
 
         return new WaypointCheckOutResponse
         {

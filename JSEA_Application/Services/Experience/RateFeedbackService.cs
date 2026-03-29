@@ -13,17 +13,20 @@ public class RateFeedbackService : IRateFeedbackService
     private readonly IVisitRepository _visitRepository;
     private readonly IRatingRepository _ratingRepository;
     private readonly IFeedbackRepository _feedbackRepository;
+    private readonly IExperienceMetricRepository _experienceMetrics;
     private readonly IRewardService _rewardService;
 
     public RateFeedbackService(
         IVisitRepository visitRepository,
         IRatingRepository ratingRepository,
         IFeedbackRepository feedbackRepository,
+        IExperienceMetricRepository experienceMetrics,
         IRewardService rewardService)
     {
         _visitRepository = visitRepository;
         _ratingRepository = ratingRepository;
         _feedbackRepository = feedbackRepository;
+        _experienceMetrics = experienceMetrics;
         _rewardService = rewardService;
     }
 
@@ -40,6 +43,7 @@ public class RateFeedbackService : IRateFeedbackService
             PhotoUrls = request.PhotoUrls
         };
         visit = await _visitRepository.SaveAsync(visit, cancellationToken);
+        await _experienceMetrics.IncrementVisitCountAsync(request.ExperienceId, cancellationToken);
 
         await _rewardService.AddRewardPointsAsync(travelerId, PointsPerVisit, "mark_visited", cancellationToken);
 
@@ -53,6 +57,7 @@ public class RateFeedbackService : IRateFeedbackService
             };
             rating = await _ratingRepository.SaveAsync(rating, cancellationToken);
             ratingId = rating.Id;
+            await _experienceMetrics.AddRatingAsync(request.ExperienceId, request.RatingValue, cancellationToken);
         }
 
         Guid? feedbackId = null;

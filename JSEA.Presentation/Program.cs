@@ -116,6 +116,7 @@ builder.Services.AddScoped<IStaffFeedbackService, StaffFeedbackService>();
 
 // Rate & Feedback
 builder.Services.AddScoped<IVisitRepository, VisitRepository>();
+builder.Services.AddScoped<IExperienceMetricRepository, ExperienceMetricRepository>();
 builder.Services.AddScoped<IRatingRepository, RatingRepository>();
 builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
 builder.Services.AddScoped<IUserProfileRepository, UserProfileRepository>();
