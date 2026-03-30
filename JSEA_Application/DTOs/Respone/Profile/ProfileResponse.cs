@@ -27,5 +27,9 @@ namespace JSEA_Application.DTOs.Respone.Profile
         /// <summary>Điểm thưởng — chỉ traveler; admin/staff không trả field này.</summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? Point { get; set; }
+
+        /// <summary>Traveler: true nếu vẫn cần quiz (chưa có travel style); đã có style hoặc đã xong quiz thì false; admin/staff: null.</summary>
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? RequiresVibeQuiz { get; set; }
     }
 }

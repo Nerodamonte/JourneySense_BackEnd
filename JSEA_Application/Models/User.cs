@@ -51,6 +51,10 @@ public partial class User
     [Column("last_login_at")]
     public DateTime? LastLoginAt { get; set; }
 
+    /// <summary>Traveler: set khi đã submit vibe quiz; null = FE nên bắt làm quiz (account mới).</summary>
+    [Column("vibe_quiz_completed_at")]
+    public DateTime? VibeQuizCompletedAt { get; set; }
+
     [Column("deleted_at")]
     public DateTime? DeletedAt { get; set; }
 
