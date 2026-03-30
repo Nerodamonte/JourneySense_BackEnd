@@ -36,7 +36,7 @@ public class PurchaseService : IPurchaseService
         if (package == null || package.IsActive != true)
             throw new ArgumentException("Gói không tồn tại hoặc đã ngừng hoạt động.");
 
-        var amount = (long)(package.SalePrice ?? package.Price);
+        var amount = (long)package.Price;
         var nowUtc = DateTime.UtcNow;
         var orderCode = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -49,7 +49,7 @@ public class PurchaseService : IPurchaseService
             packageId = package.Id,
             title = package.Title,
             price = package.Price,
-            salePrice = package.SalePrice,
+            salePrice = (decimal?)null,
             type = package.Type,
             distanceLimitKm = package.DistanceLimitKm,
             durationInDays = package.DurationInDays
@@ -230,7 +230,9 @@ public class PurchaseService : IPurchaseService
             UsedKm = 0,
             IsActive = true,
             ActivatedAt = nowUtc,
-            ExpiresAt = nowUtc.AddDays(package.DurationInDays + bonusDays)
+            ExpiresAt = package.DurationInDays <= 0
+                ? null
+                : nowUtc.AddDays(package.DurationInDays + bonusDays)
         };
 
         return await _userPackageRepository.CreateAsync(newUserPackage, cancellationToken);

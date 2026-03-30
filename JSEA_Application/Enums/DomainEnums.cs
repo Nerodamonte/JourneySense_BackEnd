@@ -4,7 +4,7 @@ public enum NotificationType { ExperienceVerified, Featured, Rejected, TimeBudge
 public enum TransactionType { Purchase, Renewal, Upgrade }
 public enum TransactionStatus { Pending, Completed, Failed, Refunded }
 public enum ExperienceStatus { ActiveUnverified, Verified, Featured, NeedsUpdate, Inactive, Rejected }
-public enum PackageType { Basic, Pro }
+public enum PackageType { Basic, Pro, Ultra }
 public enum InteractionType { Accepted, Skipped, Saved, ViewedDetails }
 public enum UserRole { Traveler, Staff, Admin }
 public enum UserStatus { PendingVerification, Active, Suspended, Deleted }

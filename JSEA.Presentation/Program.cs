@@ -90,7 +90,31 @@ builder.Services.AddHttpClient();
 builder.Services.Configure<JSEA_Infrastructure.Services.Goong.GoongOptions>(
     builder.Configuration.GetSection(JSEA_Infrastructure.Services.Goong.GoongOptions.SectionName));
 builder.Services.AddScoped<IGoongMapsService, JSEA_Infrastructure.Services.Goong.GoongMapsService>();
-builder.Services.AddScoped<IWeatherService, JSEA_Infrastructure.Services.OpenMeteo.OpenMeteoWeatherService>();
+
+// Thời tiết: Open-Meteo + cache. Redis chỉ khi có ConnectionStrings:Redis VÀ WeatherCache:UseRedis != false.
+builder.Services.Configure<JSEA_Infrastructure.Services.OpenMeteo.WeatherCacheOptions>(
+    builder.Configuration.GetSection(JSEA_Infrastructure.Services.OpenMeteo.WeatherCacheOptions.SectionName));
+var weatherCacheOpts = builder.Configuration
+    .GetSection(JSEA_Infrastructure.Services.OpenMeteo.WeatherCacheOptions.SectionName)
+    .Get<JSEA_Infrastructure.Services.OpenMeteo.WeatherCacheOptions>()
+    ?? new JSEA_Infrastructure.Services.OpenMeteo.WeatherCacheOptions();
+var redisConn = builder.Configuration.GetConnectionString("Redis");
+var useRedis = !string.IsNullOrWhiteSpace(redisConn) && weatherCacheOpts.UseRedis != false;
+if (useRedis)
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConn;
+        options.InstanceName = "JSEA:";
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
+
+builder.Services.AddScoped<JSEA_Infrastructure.Services.OpenMeteo.OpenMeteoWeatherService>();
+builder.Services.AddScoped<IWeatherService, JSEA_Infrastructure.Services.OpenMeteo.CachingWeatherService>();
 builder.Services.AddScoped<IJourneyService, JourneyService>();
 builder.Services.AddScoped<IJourneyRepository, JourneyRepository>();
 builder.Services.AddScoped<IJourneyProgressService, JourneyProgressService>();

@@ -12,6 +12,8 @@ public class AuthService : IAuthService
     private readonly IUserRepository _userRepository;
     private readonly IUserProfileRepository _userProfileRepository;
     private readonly IEmailOtpRepository _emailOtpRepository;
+    private readonly IPackageRepository _packageRepository;
+    private readonly IUserPackageRepository _userPackageRepository;
     private readonly IJwtService _jwtService;
     private readonly IConfiguration _configuration;
 
@@ -19,12 +21,16 @@ public class AuthService : IAuthService
         IUserRepository userRepository,
         IUserProfileRepository userProfileRepository,
         IEmailOtpRepository emailOtpRepository,
+        IPackageRepository packageRepository,
+        IUserPackageRepository userPackageRepository,
         IJwtService jwtService,
         IConfiguration configuration)
     {
         _userRepository = userRepository;
         _userProfileRepository = userProfileRepository;
         _emailOtpRepository = emailOtpRepository;
+        _packageRepository = packageRepository;
+        _userPackageRepository = userPackageRepository;
         _jwtService = jwtService;
         _configuration = configuration;
     }
@@ -128,6 +134,7 @@ public class AuthService : IAuthService
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(password);
 
         await _userRepository.CreateAsync(user);
+        await EnsureDefaultTravelerPackageAsync(user.Id);
 
         // 5. Mark OTP đã dùng
         await _emailOtpRepository.MarkAllUsedByEmailAsync(email);
@@ -159,5 +166,30 @@ public class AuthService : IAuthService
         }
 
         return true;
+    private async Task EnsureDefaultTravelerPackageAsync(Guid userId)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var currentPackage = await _userPackageRepository.GetCurrentByUserIdAsync(userId, nowUtc);
+        if (currentPackage != null)
+            return;
+
+        var basicType = PackageType.Basic.ToString().ToLowerInvariant();
+        var activePackages = await _packageRepository.GetListAsync(true);
+        var basicPackage = activePackages.FirstOrDefault(p => p.Type == basicType);
+        if (basicPackage == null)
+            throw new InvalidOperationException("Không tìm thấy gói Basic đang hoạt động.");
+
+        var userPackage = new JSEA_Application.Models.UserPackage
+        {
+            UserId = userId,
+            PackageId = basicPackage.Id,
+            DistanceLimitKm = basicPackage.DistanceLimitKm,
+            UsedKm = 0,
+            IsActive = true,
+            ActivatedAt = nowUtc,
+            ExpiresAt = basicPackage.DurationInDays <= 0 ? null : nowUtc.AddDays(basicPackage.DurationInDays)
+        };
+
+        await _userPackageRepository.CreateAsync(userPackage);
     }
 }
