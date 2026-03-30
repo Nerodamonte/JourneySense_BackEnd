@@ -87,6 +87,11 @@ builder.Services.AddScoped<IUserPackageService, UserPackageService>();
 
 // Journey Setup (Goong Maps)
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient(JSEA_Infrastructure.Services.Goong.GoongOptions.HttpClientName, client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(60);
+    client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "JourneySense-API/1.0");
+});
 builder.Services.Configure<JSEA_Infrastructure.Services.Goong.GoongOptions>(
     builder.Configuration.GetSection(JSEA_Infrastructure.Services.Goong.GoongOptions.SectionName));
 builder.Services.AddScoped<IGoongMapsService, JSEA_Infrastructure.Services.Goong.GoongMapsService>();

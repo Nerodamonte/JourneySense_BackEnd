@@ -497,7 +497,8 @@ public class JourneyService : IJourneyService
             ? vt
             : VehicleType.Car;
 
-        var route = await _goongMapsService.GetDirectionRouteAsync(
+        var route = await GoongDirectionVehicleFallback.GetDirectionFirstSuccessfulAsync(
+            _goongMapsService,
             journey.OriginLocation,
             journey.DestinationLocation,
             vehicle,
@@ -555,7 +556,8 @@ public class JourneyService : IJourneyService
             if (journey.DestinationLocation == null)
                 throw new InvalidOperationException("Hành trình thiếu tọa độ destination.");
 
-            var routeToDestination = await _goongMapsService.GetDirectionRouteAsync(
+            var routeToDestination = await GoongDirectionVehicleFallback.GetDirectionFirstSuccessfulAsync(
+                _goongMapsService,
                 origin,
                 journey.DestinationLocation,
                 vehicle,
@@ -632,7 +634,8 @@ public class JourneyService : IJourneyService
 
         var destination = new Point(selected.Location.X, selected.Location.Y) { SRID = 4326 };
 
-        var route = await _goongMapsService.GetDirectionRouteAsync(
+        var route = await GoongDirectionVehicleFallback.GetDirectionFirstSuccessfulAsync(
+            _goongMapsService,
             origin,
             destination,
             vehicle,

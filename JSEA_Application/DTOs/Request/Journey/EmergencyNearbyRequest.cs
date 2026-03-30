@@ -5,7 +5,10 @@ namespace JSEA_Application.DTOs.Request.Journey;
 /// <summary>Body POST /api/emergency/nearby — một chạm khẩn cấp: chỉ cần type + GPS (Goong). Mặc định trả 1 địa điểm gần nhất.</summary>
 public class EmergencyNearbyRequest
 {
-    /// <summary>hư xe → repair_shop; chấn thương/cấp cứu → hospital; nhà thuốc → pharmacy</summary>
+    /// <summary>
+    /// repair_shop | hospital | pharmacy | gas_station | restaurant | lodging | coffee
+    /// (xăng, ăn, nghỉ, cà phê — từ khóa Goong nội bộ).
+    /// </summary>
     [Required(ErrorMessage = "type là bắt buộc")]
     [StringLength(20)]
     public string Type { get; set; } = null!;

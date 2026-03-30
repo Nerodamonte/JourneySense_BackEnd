@@ -275,7 +275,8 @@ public class JourneyShareService : IJourneyShareService
             var vehicle = Enum.TryParse<VehicleType>(j.VehicleType, true, out var vt)
                 ? vt
                 : VehicleType.Motorbike;
-            var directed = await _goongMapsService.GetDirectionRouteAsync(
+            var directed = await GoongDirectionVehicleFallback.GetDirectionFirstSuccessfulAsync(
+                _goongMapsService,
                 j.OriginLocation,
                 j.DestinationLocation,
                 vehicle,
