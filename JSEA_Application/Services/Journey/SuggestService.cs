@@ -78,11 +78,10 @@ namespace JSEA_Application.Services.Journey
             if (journey.MaxStops.HasValue && acceptedCount >= journey.MaxStops.Value)
                 return new List<SuggestionResponse>();
 
-            // Check time budget
+            // Thời gian còn lại cho dừng/khám phá: TimeBudgetMinutes − Σ ActualStopMinutes (waypoint đã checkout).
             var usedMinutes = await _journeyRepository.GetUsedMinutesAsync(journeyId, cancellationToken);
-            var baseRouteMinutes = segment.EstimatedDurationMinutes ?? journey.EstimatedDurationMinutes ?? 0;
-            var remainingExtraMinutes = (journey.TimeBudgetMinutes ?? 0) - baseRouteMinutes - usedMinutes;
-            if (remainingExtraMinutes <= 0) return new List<SuggestionResponse>();
+            var remainingExploreMinutes = (journey.TimeBudgetMinutes ?? 0) - usedMinutes;
+            if (remainingExploreMinutes <= 0) return new List<SuggestionResponse>();
 
             // PRODUCTION: Idempotent suggest.
             // If suggestions for this journey+segment were already generated earlier,
@@ -90,11 +89,7 @@ namespace JSEA_Application.Services.Journey
             var cached = await _journeyRepository.GetSuggestionsByJourneySegmentAsync(journeyId, segmentId, cancellationToken);
             if (cached.Count > 0)
             {
-                // If time budget has changed (waypoints accepted/removed), hide suggestions that can no longer fit.
-                var filtered = cached
-                    .Where(s => (s.DetourTimeMinutes ?? 0) <= remainingExtraMinutes)
-                    .Take(10)
-                    .ToList();
+                var filtered = cached.Take(10).ToList();
 
                 return filtered.Select(s => new SuggestionResponse
                 {
@@ -133,16 +128,6 @@ namespace JSEA_Application.Services.Journey
                 maxDetourDistanceMeters: journey.MaxDetourDistanceMeters,
                 excludeIds: alreadySuggested,
                 cancellationToken: cancellationToken);
-
-            // Filter time budget
-            // NTS .Distance() trả về degrees, nhân 111_000 để convert sang meters
-            candidates = candidates.Where(e =>
-            {
-                var distanceDeg = e.Location.Distance(segment.SegmentPath);
-                var distanceM = (int)Math.Round(distanceDeg * 111_000);
-                var detour = EstimateDetourMinutes(distanceM, journey.VehicleType);
-                return detour <= remainingExtraMinutes;
-            }).ToList();
 
             if (candidates.Count == 0) return new List<SuggestionResponse>();
 

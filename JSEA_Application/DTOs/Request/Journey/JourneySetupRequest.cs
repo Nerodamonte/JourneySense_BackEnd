@@ -48,8 +48,9 @@ public class JourneySetupRequest : IValidatableObject
     /// <summary>Mức độ đông đúc ưu tiên (All, Quiet, Normal, Busy).</summary>
     public CrowdLevel PreferredCrowdLevel { get; set; } = CrowdLevel.All;
 
+    /// <summary>Phút dành cho dừng/khám phá tại waypoint (không gồm thời gian chạy chính tuyến).</summary>
     [Required]
-    [Range(1, 1440, ErrorMessage = "Thời gian dự kiến phải từ 1 đến 1440 phút")]
+    [Range(1, 1440, ErrorMessage = "Ngân sách phút dừng dọc đường phải từ 1 đến 1440 phút")]
     public int TimeBudgetMinutes { get; set; }
 
     /// <summary>Khoảng cách detour tối đa cho các gợi ý Experience (mét).</summary>
