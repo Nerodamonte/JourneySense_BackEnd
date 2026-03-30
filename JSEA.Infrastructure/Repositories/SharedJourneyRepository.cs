@@ -68,6 +68,8 @@ public class SharedJourneyRepository : ISharedJourneyRepository
                 .ThenInclude(j => j.JourneyWaypoints)
                     .ThenInclude(w => w.Experience)
                         .ThenInclude(e => e.ExperiencePhotos)
+            .Include(s => s.Journey)
+                .ThenInclude(j => j.RouteSegments)
             .FirstOrDefaultAsync(
                 s => s.ShareCode == shareCode
                      && s.IsActive

@@ -25,4 +25,7 @@ public class JourneyListItemResponse
     public JourneyStatus? Status { get; set; }
 
     public DateTime? CreatedAt { get; set; }
+
+    /// <summary>Tuyến chính để preview trên map trong danh sách lịch sử.</summary>
+    public List<GeoPointResponse>? RoutePoints { get; set; }
 }

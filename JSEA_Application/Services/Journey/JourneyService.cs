@@ -209,7 +209,8 @@ public class JourneyService : IJourneyService
                 ? mood
                 : null,
             Status = Enum.TryParse<JourneyStatus>(j.Status, true, out var js) ? js : null,
-            CreatedAt = j.CreatedAt
+            CreatedAt = j.CreatedAt,
+            RoutePoints = JourneyRoutePointsHelper.FromJourney(j)
         }).ToList();
     }
 
@@ -238,11 +239,7 @@ public class JourneyService : IJourneyService
                 .SingleOrDefault();
         }
 
-        var routePoints = j.RoutePath != null
-            ? j.RoutePath.Coordinates
-                .Select(c => new GeoPointResponse { Latitude = c.Y, Longitude = c.X })
-                .ToList()
-            : null;
+        var routePoints = JourneyRoutePointsHelper.FromJourney(j);
 
         var segments = j.RouteSegments?
             .OrderBy(s => s.SegmentOrder ?? int.MaxValue)
@@ -310,6 +307,7 @@ public class JourneyService : IJourneyService
             JourneyFeedback = showJourneyFeedbackText ? j.JourneyFeedback : null,
             JourneyFeedbackModerationStatus = hasJourneyFeedback ? j.JourneyFeedbackModerationStatus : null,
             RoutePoints = routePoints,
+            SetupPrimaryRoutePoints = JourneyRoutePointsHelper.SetupPrimaryRouteFromSegments(j),
             Segments = segments,
             Waypoints = waypoints,
             SelectedSegmentId = selectedSegmentId
