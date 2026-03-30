@@ -28,8 +28,7 @@ public interface IJourneyService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Lưu danh sách các điểm user chọn ghé (waypoints) cho một journey theo segment (route) đã chọn.
-    /// Time budget check = base route minutes (Goong) + Σ detour minutes.
+    /// Lưu danh sách các điểm user chọn ghé theo segment đã chọn. Kiểm tra quãng segment với hạn km còn lại của gói.
     /// Replace toàn bộ waypoints hiện tại.
     /// </summary>
     Task<bool> SaveSelectedWaypointsAsync(

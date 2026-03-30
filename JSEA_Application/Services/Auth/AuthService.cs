@@ -1,15 +1,17 @@
 using JSEA_Application.Interfaces;
-using JSEA_Application.Enums;
+using JSEA_Application.Constants;
 using JSEA_Application.Interfaces.Auth;
 using JSEA_Application.DTOs.Respone.Auth;
 using Microsoft.Extensions.Configuration;
 using JSEA_Application.Models;
+using JSEA_Application.Enums;
 
 namespace JSEA_Application.Services.Auth;
 
 public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
+    private readonly IUserProfileRepository _userProfileRepository;
     private readonly IEmailOtpRepository _emailOtpRepository;
     private readonly IPackageRepository _packageRepository;
     private readonly IUserPackageRepository _userPackageRepository;
@@ -18,6 +20,7 @@ public class AuthService : IAuthService
 
     public AuthService(
         IUserRepository userRepository,
+        IUserProfileRepository userProfileRepository,
         IEmailOtpRepository emailOtpRepository,
         IPackageRepository packageRepository,
         IUserPackageRepository userPackageRepository,
@@ -25,6 +28,7 @@ public class AuthService : IAuthService
         IConfiguration configuration)
     {
         _userRepository = userRepository;
+        _userProfileRepository = userProfileRepository;
         _emailOtpRepository = emailOtpRepository;
         _packageRepository = packageRepository;
         _userPackageRepository = userPackageRepository;
@@ -46,15 +50,15 @@ public class AuthService : IAuthService
             !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
             throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng");
 
-      
+
         var accessToken = _jwtService.GenerateAccessToken(user);
         var refreshToken = _jwtService.GenerateRefreshToken();
 
-     
+
         await _jwtService.SaveRefreshTokenAsync(user.Id, refreshToken);
 
-        // Update last login
         user.LastLoginAt = DateTime.UtcNow;
+        var requiresVibeQuiz = await ResolveRequiresVibeQuizAsync(user, CancellationToken.None);
         await _userRepository.UpdateAsync(user);
 
         return new LoginResponse
@@ -63,11 +67,12 @@ public class AuthService : IAuthService
             Email = user.Email,
             Role = user.Role,
             AccessToken = accessToken,
-            RefreshToken = refreshToken
+            RefreshToken = refreshToken,
+            RequiresVibeQuiz = requiresVibeQuiz
         };
     }
 
-    
+
     public async Task<LoginResponse> RefreshTokenAsync(string refreshToken)
     {
         var storedToken = await _jwtService.GetRefreshTokenAsync(refreshToken);
@@ -86,13 +91,19 @@ public class AuthService : IAuthService
         // Save new refresh token
         await _jwtService.SaveRefreshTokenAsync(user.Id, newRefreshToken);
 
+        var beforeQuizFlag = user.VibeQuizCompletedAt;
+        var requiresVibeQuiz = await ResolveRequiresVibeQuizAsync(user, CancellationToken.None);
+        if (beforeQuizFlag != user.VibeQuizCompletedAt)
+            await _userRepository.UpdateAsync(user);
+
         return new LoginResponse
         {
             UserId = user.Id,
             Email = user.Email,
             Role = user.Role,
             AccessToken = newAccessToken,
-            RefreshToken = newRefreshToken
+            RefreshToken = newRefreshToken,
+            RequiresVibeQuiz = requiresVibeQuiz
         };
     }
 
@@ -136,6 +147,28 @@ public class AuthService : IAuthService
         await _jwtService.RevokeRefreshTokenAsync(refreshToken);
     }
 
+    /// <summary>
+    /// Traveler cần quiz chỉ khi chưa có travel style trên profile và chưa đánh dấu xong quiz.
+    /// Đã tự chọn travel style trên profile ⇒ coi như đủ onboarding (gán VibeQuizCompletedAt; caller lưu DB khi cần).
+    /// </summary>
+    private async Task<bool> ResolveRequiresVibeQuizAsync(User user, CancellationToken cancellationToken)
+    {
+        if (!string.Equals(user.Role, AppRoles.Traveler, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (user.VibeQuizCompletedAt.HasValue)
+            return false;
+
+        var profile = await _userProfileRepository.GetByUserIdAsync(user.Id, cancellationToken);
+        if (profile?.TravelStyle is { Count: > 0 })
+        {
+            user.VibeQuizCompletedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.UtcNow;
+            return false;
+        }
+
+        return true;
+       
+    }
     private async Task EnsureDefaultTravelerPackageAsync(Guid userId)
     {
         var nowUtc = DateTime.UtcNow;

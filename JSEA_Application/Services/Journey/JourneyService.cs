@@ -5,6 +5,7 @@ using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
 using NetTopologySuite.Geometries;
+using UserPackageEntity = JSEA_Application.Models.UserPackage;
 
 namespace JSEA_Application.Services.Journey;
 
@@ -15,19 +16,25 @@ public class JourneyService : IJourneyService
     private readonly IMicroExperienceRepository _microExperienceRepository;
     private readonly IExperienceEmbeddingRepository _embeddingRepository;
     private readonly IVisitRepository _visitRepository;
+    private readonly IUserPackageRepository _userPackageRepository;
+    private readonly IPackageRepository _packageRepository;
 
     public JourneyService(
         IJourneyRepository journeyRepository,
         IGoongMapsService goongMapsService,
         IMicroExperienceRepository microExperienceRepository,
         IExperienceEmbeddingRepository embeddingRepository,
-        IVisitRepository visitRepository)
+        IVisitRepository visitRepository,
+        IUserPackageRepository userPackageRepository,
+        IPackageRepository packageRepository)
     {
         _journeyRepository = journeyRepository;
         _goongMapsService = goongMapsService;
         _microExperienceRepository = microExperienceRepository;
         _embeddingRepository = embeddingRepository;
         _visitRepository = visitRepository;
+        _userPackageRepository = userPackageRepository;
+        _packageRepository = packageRepository;
     }
 
     private static int EstimateDetourMinutes(int detourMeters, string vehicleType)
@@ -76,6 +83,11 @@ public class JourneyService : IJourneyService
         if (routes == null || routes.Count == 0)
             return null;
 
+        var primaryRoute = routes[0];
+        var userPackage = await EnsureTravelerHasActivePackageAsync(travelerId.Value, cancellationToken);
+        var plannedKm = primaryRoute.TotalDistanceMeters / 1000m;
+        EnsurePlannedDistanceWithinPackage(plannedKm, userPackage);
+
         // ExperienceCount: dọc tuyến + hard constraints + pool dừng (TimeBudgetMinutes) + đã có embedding.
         // TimeBudgetMinutes = ngân sách phút dừng/khám phá, không trừ ETA chính tuyến.
         var explorePoolMinutes = request.TimeBudgetMinutes;
@@ -114,8 +126,6 @@ public class JourneyService : IJourneyService
 
             route.ExperienceCount = await _embeddingRepository.CountExistingAsync(filteredCandidateIds, cancellationToken);
         }
-
-        var primaryRoute = routes[0];
 
         var currentMood = request.CurrentMood.HasValue
             ? request.CurrentMood.Value.ToString()
@@ -337,7 +347,9 @@ public class JourneyService : IJourneyService
         if (suggestions.Any(s => s.JourneyId != journeyId || s.SegmentId != segmentId))
             return false;
 
-        // TimeBudgetMinutes là pool dừng thực tế (checkout); không chặn save theo base + Σ detour.
+        var userPackageForSegment = await EnsureTravelerHasActivePackageAsync(travelerId, cancellationToken);
+        var segmentPlannedKm = (segment.DistanceMeters ?? 0) / 1000m;
+        EnsurePlannedDistanceWithinPackage(segmentPlannedKm, userPackageForSegment);
 
         // Persist selected route into journey fields (so later steps use the chosen route).
         journey.RoutePath = segment.SegmentPath;
@@ -763,6 +775,41 @@ public class JourneyService : IJourneyService
         }
 
         return bestAlongMeters;
+    }
+
+    /// <summary>Gói đang active hoặc tạo gói Basic mặc định (user đăng ký cũ chưa có bản ghi).</summary>
+    private async Task<UserPackageEntity> EnsureTravelerHasActivePackageAsync(Guid travelerId, CancellationToken cancellationToken)
+    {
+        var nowUtc = DateTime.UtcNow;
+        var current = await _userPackageRepository.GetCurrentByUserIdAsync(travelerId, nowUtc, cancellationToken);
+        if (current != null)
+            return current;
+
+        var basicType = PackageType.Basic.ToString().ToLowerInvariant();
+        var packages = await _packageRepository.GetListAsync(true, cancellationToken);
+        var basic = packages.FirstOrDefault(p => p.Type == basicType);
+        if (basic == null)
+            throw new InvalidOperationException("Hệ thống chưa cấu hình gói Basic đang hoạt động.");
+
+        return await _userPackageRepository.CreateAsync(new UserPackageEntity
+        {
+            UserId = travelerId,
+            PackageId = basic.Id,
+            DistanceLimitKm = basic.DistanceLimitKm,
+            UsedKm = 0,
+            IsActive = true,
+            ActivatedAt = nowUtc,
+            ExpiresAt = basic.DurationInDays <= 0 ? null : nowUtc.AddDays(basic.DurationInDays)
+        }, cancellationToken);
+    }
+
+    /// <summary>Tổng km gói (snapshot <c>distance_limit_km</c>) trừ <c>used_km</c> = phần còn được phép chọn cho tuyến mới.</summary>
+    private static void EnsurePlannedDistanceWithinPackage(decimal plannedKm, UserPackageEntity userPackage)
+    {
+        var remainingKm = (decimal)userPackage.DistanceLimitKm - userPackage.UsedKm;
+        if (plannedKm > remainingKm)
+            throw new InvalidOperationException(
+                $"Quãng đường tuyến chính (~{plannedKm:F1} km) vượt hạn mức còn lại ({remainingKm:F1} km trong gói {userPackage.DistanceLimitKm} km). Vui lòng chọn tuyến ngắn hơn hoặc nâng cấp gói.");
     }
 
     private static double DegreesToRadians(double degrees) => degrees * (Math.PI / 180.0);

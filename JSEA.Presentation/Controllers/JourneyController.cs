@@ -168,11 +168,18 @@ public class JourneyController : ControllerBase
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
             return Unauthorized(new { message = "Vui lòng đăng nhập." });
 
-        var result = await _journeyService.ValidateAndCreateJourneyAsync(request, travelerId, cancellationToken);
-        if (result == null)
-            return StatusCode(502, new { message = "Không thể phân tích tuyến. Kiểm tra tọa độ hoặc API Goong Maps." });
+        try
+        {
+            var result = await _journeyService.ValidateAndCreateJourneyAsync(request, travelerId, cancellationToken);
+            if (result == null)
+                return StatusCode(502, new { message = "Không thể phân tích tuyến. Kiểm tra tọa độ hoặc API Goong Maps." });
 
-        return Created($"/api/journeys/{result.JourneyId}", result);
+            return Created($"/api/journeys/{result.JourneyId}", result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>
@@ -264,15 +271,22 @@ public class JourneyController : ControllerBase
         if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
             return Unauthorized(new { message = "Vui lòng đăng nhập." });
 
-        var ok = await _journeyService.SaveSelectedWaypointsAsync(
-            journeyId,
-            travelerId,
-            request.SegmentId,
-            request.Waypoints,
-            cancellationToken);
+        try
+        {
+            var ok = await _journeyService.SaveSelectedWaypointsAsync(
+                journeyId,
+                travelerId,
+                request.SegmentId,
+                request.Waypoints,
+                cancellationToken);
 
-        if (!ok)
-            return BadRequest(new { message = "Không thể lưu waypoints (kiểm tra route/đề xuất/time budget)." });
+            if (!ok)
+                return BadRequest(new { message = "Không thể lưu waypoints (kiểm tra route/đề xuất/hạn km gói)." });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
 
         // Additive response: keep message, also return waypointId list for FE check-in/checkout.
         var detail = await _journeyService.GetByIdAsync(journeyId, travelerId, cancellationToken);
@@ -407,7 +421,7 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
-    /// Check-out (FE bấm "Rời đi"). Rating bắt buộc. (Authorized)
+    /// Check-out (FE bấm "Rời đi"). Rating tuỳ chọn (1–5); bỏ trống thì không ghi rating. (Authorized)
     /// </summary>
     [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/checkout")]
     [Authorize]
@@ -430,7 +444,7 @@ public class JourneyController : ControllerBase
 
         var result = await _journeyProgressService.CheckOutAsync(journeyId, waypointId, travelerId, request, cancellationToken);
         if (result == null)
-            return BadRequest(new { message = "Không thể check-out (rating/dữ liệu không hợp lệ hoặc hành trình/waypoint không tồn tại)." });
+            return BadRequest(new { message = "Không thể check-out (rating 1–5 nếu gửi, hoặc hành trình/waypoint không tồn tại/không hợp lệ)." });
 
         return Ok(result);
     }
