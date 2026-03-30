@@ -70,6 +70,7 @@ builder.Services.AddScoped<IEmailOtpRepository, EmailOtpRepository>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
 //Profile
+builder.Services.AddScoped<ITravelStyleTextGenerator, TravelStyleTextGenerator>();
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 
 // Micro-Experience
