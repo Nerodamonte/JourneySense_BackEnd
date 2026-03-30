@@ -407,7 +407,7 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
-    /// Check-out (FE bấm "Rời đi"). Rating bắt buộc. (Authorized)
+    /// Check-out (FE bấm "Rời đi"). Rating tuỳ chọn (1–5); bỏ trống thì không ghi rating. (Authorized)
     /// </summary>
     [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/checkout")]
     [Authorize]
@@ -430,7 +430,7 @@ public class JourneyController : ControllerBase
 
         var result = await _journeyProgressService.CheckOutAsync(journeyId, waypointId, travelerId, request, cancellationToken);
         if (result == null)
-            return BadRequest(new { message = "Không thể check-out (rating/dữ liệu không hợp lệ hoặc hành trình/waypoint không tồn tại)." });
+            return BadRequest(new { message = "Không thể check-out (rating 1–5 nếu gửi, hoặc hành trình/waypoint không tồn tại/không hợp lệ)." });
 
         return Ok(result);
     }

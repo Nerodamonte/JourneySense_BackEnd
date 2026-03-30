@@ -200,7 +200,7 @@ public class JourneyProgressService : IJourneyProgressService
         CancellationToken cancellationToken = default)
     {
         if (request == null) return null;
-        if (request.RatingValue < 1 || request.RatingValue > 5) return null;
+        if (request.RatingValue is { } rv && (rv < 1 || rv > 5)) return null;
 
         var waypoint = await _journeyRepository.GetWaypointForTravelerAsync(journeyId, waypointId, travelerId, cancellationToken);
         if (waypoint?.Journey == null) return null;
@@ -248,27 +248,32 @@ public class JourneyProgressService : IJourneyProgressService
             visit = await _visitRepository.SaveAsync(visit, cancellationToken);
         }
 
-        var existingRating = await _ratingRepository.GetByVisitIdAsync(visit.Id, cancellationToken);
-        Rating rating;
-        if (existingRating == null)
+        Guid? ratingId = null;
+        if (request.RatingValue is >= 1 and <= 5)
         {
-            rating = await _ratingRepository.SaveAsync(new Rating
+            var stars = request.RatingValue.Value;
+            var existingRating = await _ratingRepository.GetByVisitIdAsync(visit.Id, cancellationToken);
+            if (existingRating == null)
             {
-                VisitId = visit.Id,
-                Rating1 = request.RatingValue,
-                CreatedAt = DateTime.UtcNow
-            }, cancellationToken);
-            await _experienceMetrics.AddRatingAsync(waypoint.ExperienceId, request.RatingValue, cancellationToken);
+                var rating = await _ratingRepository.SaveAsync(new Rating
+                {
+                    VisitId = visit.Id,
+                    Rating1 = stars,
+                    CreatedAt = DateTime.UtcNow
+                }, cancellationToken);
+                await _experienceMetrics.AddRatingAsync(waypoint.ExperienceId, stars, cancellationToken);
+                ratingId = rating.Id;
+            }
+            else
+                ratingId = existingRating.Id;
         }
-        else
-            rating = existingRating;
 
         return new WaypointCheckOutResponse
         {
             JourneyId = journeyId,
             WaypointId = waypointId,
             VisitId = visit.Id,
-            RatingId = rating.Id,
+            RatingId = ratingId,
             ActualDepartureAt = waypoint.ActualDepartureAt,
             ActualStopMinutes = waypoint.ActualStopMinutes
         };

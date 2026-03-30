@@ -4,6 +4,7 @@ using JSEA_Application.Interfaces.Auth;
 using JSEA_Application.DTOs.Respone.Auth;
 using Microsoft.Extensions.Configuration;
 using JSEA_Application.Models;
+using JSEA_Application.Enums;
 
 namespace JSEA_Application.Services.Auth;
 
@@ -49,11 +50,11 @@ public class AuthService : IAuthService
             !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
             throw new UnauthorizedAccessException("Email hoặc mật khẩu không đúng");
 
-      
+
         var accessToken = _jwtService.GenerateAccessToken(user);
         var refreshToken = _jwtService.GenerateRefreshToken();
 
-     
+
         await _jwtService.SaveRefreshTokenAsync(user.Id, refreshToken);
 
         user.LastLoginAt = DateTime.UtcNow;
@@ -71,7 +72,7 @@ public class AuthService : IAuthService
         };
     }
 
-    
+
     public async Task<LoginResponse> RefreshTokenAsync(string refreshToken)
     {
         var storedToken = await _jwtService.GetRefreshTokenAsync(refreshToken);
@@ -166,6 +167,8 @@ public class AuthService : IAuthService
         }
 
         return true;
+       
+    }
     private async Task EnsureDefaultTravelerPackageAsync(Guid userId)
     {
         var nowUtc = DateTime.UtcNow;
