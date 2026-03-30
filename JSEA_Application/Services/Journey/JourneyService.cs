@@ -76,8 +76,9 @@ public class JourneyService : IJourneyService
         if (routes == null || routes.Count == 0)
             return null;
 
-        // ExperienceCount ở setup: dọc tuyến + hard constraints + (time-budget) + chỉ tính những experience đã có embedding.
-        // Không giới hạn topK ở đây; count phản ánh số điểm có thể tính cosine/finalSimilarity để FE pin/ranking về sau.
+        // ExperienceCount: dọc tuyến + hard constraints + pool dừng (TimeBudgetMinutes) + đã có embedding.
+        // TimeBudgetMinutes = ngân sách phút dừng/khám phá, không trừ ETA chính tuyến.
+        var explorePoolMinutes = request.TimeBudgetMinutes;
         foreach (var route in routes)
         {
             if (route.RoutePath == null)
@@ -86,11 +87,7 @@ public class JourneyService : IJourneyService
                 continue;
             }
 
-            // totalTimeBudget = base route time (Goong) + detour + stop.
-            var baseRouteMinutes = route.EstimatedDurationMinutes;
-            var remainingExtraMinutes = request.TimeBudgetMinutes - baseRouteMinutes;
-
-            if (remainingExtraMinutes <= 0)
+            if (explorePoolMinutes <= 0)
             {
                 route.ExperienceCount = 0;
                 continue;
@@ -104,14 +101,13 @@ public class JourneyService : IJourneyService
                 excludeIds: new List<Guid>(),
                 cancellationToken: cancellationToken);
 
-            // Filter theo remainingExtraMinutes (detour time) tương tự suggest.
             var filteredCandidateIds = candidates
                 .Where(e =>
                 {
                     var distanceDeg = e.Location.Distance(route.RoutePath);
                     var distanceM = (int)Math.Round(distanceDeg * 111_000);
                     var detour = EstimateDetourMinutes(distanceM, request.VehicleType.ToString().ToLowerInvariant());
-                    return detour <= remainingExtraMinutes;
+                    return detour <= explorePoolMinutes;
                 })
                 .Select(e => e.Id)
                 .ToList();
@@ -341,15 +337,7 @@ public class JourneyService : IJourneyService
         if (suggestions.Any(s => s.JourneyId != journeyId || s.SegmentId != segmentId))
             return false;
 
-        // Time budget check: base route minutes + Σ detour minutes.
-        // Planned stop duration is no longer provided by client during setup.
-        var baseMinutes = segment.EstimatedDurationMinutes ?? 0;
-        var totalDetourMinutes = suggestions.Sum(s => s.DetourTimeMinutes ?? 0);
-        var totalTripMinutes = baseMinutes + totalDetourMinutes;
-
-        var budgetMinutes = journey.TimeBudgetMinutes ?? 0;
-        if (budgetMinutes > 0 && totalTripMinutes > budgetMinutes)
-            return false;
+        // TimeBudgetMinutes là pool dừng thực tế (checkout); không chặn save theo base + Σ detour.
 
         // Persist selected route into journey fields (so later steps use the chosen route).
         journey.RoutePath = segment.SegmentPath;

@@ -123,12 +123,8 @@ public class JourneyRepository : IJourneyRepository
     {
         return await _context.JourneyWaypoints
             .AsNoTracking()
-            .Where(w => w.JourneyId == journeyId)
-            .Include(w => w.Suggestion)
-            .SumAsync(w =>
-                (w.ActualStopMinutes ?? 0) +
-                (w.Suggestion != null ? w.Suggestion.DetourTimeMinutes ?? 0 : 0),
-                cancellationToken);
+            .Where(w => w.JourneyId == journeyId && w.ActualDepartureAt.HasValue)
+            .SumAsync(w => w.ActualStopMinutes ?? 0, cancellationToken);
     }
 
     public async Task<int> GetAcceptedWaypointCountAsync(Guid journeyId, CancellationToken cancellationToken = default)

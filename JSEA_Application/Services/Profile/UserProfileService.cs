@@ -4,218 +4,224 @@ using JSEA_Application.DTOs.Respone.Profile;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
-using Microsoft.Extensions.Configuration;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-namespace JSEA_Application.Services.Profile
+namespace JSEA_Application.Services.Profile;
+
+public class UserProfileService : IUserProfileService
 {
-    public class UserProfileService : IUserProfileService
+    private readonly IUserProfileRepository _userProfileRepository;
+    private readonly IUserRepository _userRepository;
+    private readonly ITravelStyleTextGenerator _travelStyleTextGenerator;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<UserProfileService> _logger;
+
+    public UserProfileService(
+        IUserProfileRepository userProfileRepository,
+        IUserRepository userRepository,
+        ITravelStyleTextGenerator travelStyleTextGenerator,
+        IServiceScopeFactory scopeFactory,
+        ILogger<UserProfileService> logger)
     {
-        private readonly IUserProfileRepository _userProfileRepository;
-        private readonly IUserRepository _userRepository;
-        private readonly IConfiguration _configuration;
-        private readonly IHttpClientFactory _httpClientFactory;
+        _userProfileRepository = userProfileRepository;
+        _userRepository = userRepository;
+        _travelStyleTextGenerator = travelStyleTextGenerator;
+        _scopeFactory = scopeFactory;
+        _logger = logger;
+    }
 
-        private const string GeminiGenerateModel = "gemini-2.5-flash";
+    public async Task UpdateProfileAsync(
+        Guid userId,
+        UpdateProfileRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var userForRole = await _userRepository.GetByIdAsync(userId);
+        if (userForRole == null)
+            throw new UnauthorizedAccessException("User không tồn tại hoặc không hợp lệ.");
 
-        public UserProfileService(
-            IUserProfileRepository userProfileRepository,
-            IUserRepository userRepository,
-            IConfiguration configuration,
-            IHttpClientFactory httpClientFactory)
+        var isPortalUser = IsPortalRole(userForRole.Role);
+
+        if (request.Phone != null)
         {
-            _userProfileRepository = userProfileRepository;
-            _userRepository = userRepository;
-            _configuration = configuration;
-            _httpClientFactory = httpClientFactory;
+            if (userForRole.Phone != request.Phone)
+            {
+                userForRole.Phone = request.Phone;
+                userForRole.PhoneVerified = false;
+                userForRole.UpdatedAt = DateTime.UtcNow;
+                await _userRepository.UpdateAsync(userForRole);
+            }
         }
 
-        public async Task UpdateProfileAsync(
-            Guid userId,
-            UpdateProfileRequest request,
-            CancellationToken cancellationToken = default)
+        var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
+        var isNew = profile == null;
+
+        var hasExistingTravelStyle = profile?.TravelStyle != null && profile.TravelStyle.Count > 0;
+        var incomingTravelStyle = request.TravelStyle;
+
+        // Traveler: lần đầu bắt buộc travel style cho suggest pipeline. Admin/staff: không dùng.
+        if (!isPortalUser
+            && !hasExistingTravelStyle
+            && (incomingTravelStyle == null || incomingTravelStyle.Count == 0))
+            throw new InvalidOperationException("Vui lòng chọn ít nhất 1 travel style.");
+
+        profile ??= new UserProfile
         {
-            var userForRole = await _userRepository.GetByIdAsync(userId);
-            if (userForRole == null)
-                throw new UnauthorizedAccessException("User không tồn tại hoặc không hợp lệ.");
+            Id = Guid.NewGuid(),
+            UserId = userId
+        };
 
-            var isPortalUser = IsPortalRole(userForRole.Role);
+        if (request.FullName != null)
+            profile.FullName = request.FullName;
 
-            if (request.Phone != null)
-            {
-                if (userForRole.Phone != request.Phone)
-                {
-                    userForRole.Phone = request.Phone;
-                    userForRole.PhoneVerified = false;
-                    userForRole.UpdatedAt = DateTime.UtcNow;
-                    await _userRepository.UpdateAsync(userForRole);
-                }
-            }
+        if (request.AvatarUrl != null)
+            profile.AvatarUrl = request.AvatarUrl;
 
-            var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
-            var isNew = profile == null;
+        if (request.Bio != null)
+            profile.Bio = request.Bio;
 
-            var hasExistingTravelStyle = profile?.TravelStyle != null && profile.TravelStyle.Count > 0;
-            var incomingTravelStyle = request.TravelStyle;
+        if (request.AccessibilityNeeds != null)
+            profile.AccessibilityNeeds = request.AccessibilityNeeds;
 
-            // Traveler: lần đầu bắt buộc travel style cho suggest pipeline. Admin/staff: không dùng.
-            if (!isPortalUser
-                && !hasExistingTravelStyle
-                && (incomingTravelStyle == null || incomingTravelStyle.Count == 0))
+        List<VibeType>? refineVibesInBackground = null;
+
+        // TravelStyle + TravelStyleText: chỉ traveler; admin/staff bỏ qua request.TravelStyle.
+        if (!isPortalUser && incomingTravelStyle != null)
+        {
+            if (incomingTravelStyle.Count == 0)
                 throw new InvalidOperationException("Vui lòng chọn ít nhất 1 travel style.");
 
-            profile ??= new UserProfile
+            var incomingStrings = incomingTravelStyle
+                .Select(v => v.ToString())
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+
+            var existingStrings = profile.TravelStyle ?? new List<string>();
+
+            var incomingSet = new HashSet<string>(incomingStrings, StringComparer.OrdinalIgnoreCase);
+            var existingSet = new HashSet<string>(existingStrings, StringComparer.OrdinalIgnoreCase);
+
+            var travelStyleChanged = !incomingSet.SetEquals(existingSet);
+
+            if (travelStyleChanged)
             {
-                Id = Guid.NewGuid(),
-                UserId = userId
-            };
+                profile.TravelStyle = incomingStrings;
 
-            if (request.FullName != null)
-                profile.FullName = request.FullName;
-
-            if (request.AvatarUrl != null)
-                profile.AvatarUrl = request.AvatarUrl;
-
-            if (request.Bio != null)
-                profile.Bio = request.Bio;
-
-            if (request.AccessibilityNeeds != null)
-                profile.AccessibilityNeeds = request.AccessibilityNeeds;
-
-            // TravelStyle + TravelStyleText: chỉ traveler; admin/staff bỏ qua request.TravelStyle.
-            if (!isPortalUser && incomingTravelStyle != null)
-            {
-                if (incomingTravelStyle.Count == 0)
-                    throw new InvalidOperationException("Vui lòng chọn ít nhất 1 travel style.");
-
-                var incomingStrings = incomingTravelStyle
-                    .Select(v => v.ToString())
-                    .Where(s => !string.IsNullOrWhiteSpace(s))
-                    .ToList();
-
-                var existingStrings = profile.TravelStyle ?? new List<string>();
-
-                var incomingSet = new HashSet<string>(incomingStrings, StringComparer.OrdinalIgnoreCase);
-                var existingSet = new HashSet<string>(existingStrings, StringComparer.OrdinalIgnoreCase);
-
-                var travelStyleChanged = !incomingSet.SetEquals(existingSet);
-
-                if (travelStyleChanged)
+                if (isNew)
                 {
-                    profile.TravelStyle = incomingStrings;
-
-                    var generatedText = await GenerateTravelStyleTextAsync(incomingTravelStyle, cancellationToken);
-                    if (!string.IsNullOrEmpty(generatedText))
-                        profile.TravelStyleText = generatedText;
+                    // Lần đầu: chờ Gemini để embedding suggest ổn định ngay sau đăng ký profile.
+                    var generatedText = await _travelStyleTextGenerator.GenerateAsync(incomingTravelStyle, cancellationToken);
+                    profile.TravelStyleText = !string.IsNullOrEmpty(generatedText)
+                        ? generatedText
+                        : BuildFallbackTravelStyleText(incomingStrings);
+                }
+                else
+                {
+                    // Đã có profile: trả API nhanh — text tạm cho embedding; Gemini chỉnh sau ở nền.
+                    profile.TravelStyleText = BuildFallbackTravelStyleText(incomingStrings);
+                    refineVibesInBackground = incomingTravelStyle.ToList();
                 }
             }
-
-            if (isNew)
-                await _userProfileRepository.CreateAsync(profile, cancellationToken);
-            else
-                await _userProfileRepository.UpdateAsync(profile, cancellationToken);
         }
 
-       
+        if (isNew)
+            await _userProfileRepository.CreateAsync(profile, cancellationToken);
+        else
+            await _userProfileRepository.UpdateAsync(profile, cancellationToken);
 
-        private async Task<string?> GenerateTravelStyleTextAsync(
-            List<JSEA_Application.Enums.VibeType> travelStyle,
-            CancellationToken cancellationToken)
-        {
-            var apiKey = _configuration["Gemini:ApiKey"];
-            if (string.IsNullOrEmpty(apiKey)) return null;
-
-            var styleList = string.Join(", ", travelStyle.Select(v => v.ToString()));
-
-            var prompt = $"""
-            Ban la he thong du lich. Hay viet mot doan mo ta ngan (3-4 cau, tieng Viet khong dau)
-            mo ta phong cach du lich cua mot nguoi co cac so thich du lich sau: {styleList}.
-            Mo ta phai the hien ro rang ho thich loai dia diem nao, khong khi nhu the nao, va trai nghiem gi, nhung dia diem do phu hop nhu the nao voi so thich du lich cua nguoi dung do.
-            Chi viet doan mo ta, khong giai thich them.
-            """;
-
-            var client = _httpClientFactory.CreateClient();
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{GeminiGenerateModel}:generateContent?key={apiKey}";
-
-            var body = JsonSerializer.Serialize(new
-            {
-                contents = new[]
-                {
-                new { parts = new[] { new { text = prompt } } }
-            }
-            });
-
-            var response = await client.PostAsync(url,
-                new StringContent(body, Encoding.UTF8, "application/json"),
-                cancellationToken);
-
-            if (!response.IsSuccessStatusCode) return null;
-
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            using var doc = JsonDocument.Parse(json);
-
-            return doc.RootElement
-                .GetProperty("candidates")[0]
-                .GetProperty("content")
-                .GetProperty("parts")[0]
-                .GetProperty("text")
-                .GetString();
-        }
-
-        public async Task<ProfileResponse> GetProfileAsync(
-    Guid userId,
-    CancellationToken cancellationToken = default)
-        {
-            var user = await _userRepository.GetByIdAsync(userId);
-            if (user == null)
-                throw new UnauthorizedAccessException("User không tồn tại hoặc không hợp lệ.");
-
-            var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
-
-            var isPortalUser = IsPortalRole(user.Role);
-
-            List<VibeType>? travelStyle = null;
-            int? points = null;
-
-            if (!isPortalUser)
-            {
-                travelStyle = new List<VibeType>();
-                if (profile?.TravelStyle != null)
-                {
-                    foreach (var s in profile.TravelStyle)
-                    {
-                        if (Enum.TryParse<VibeType>(s, ignoreCase: true, out var vibe))
-                            travelStyle.Add(vibe);
-                    }
-                }
-
-                points = profile?.RewardPoints ?? 0;
-            }
-
-            return new ProfileResponse
-            {
-                UserId = userId,
-                Role = user.Role,
-                Email = user.Email,
-                Phone = user.Phone,
-
-                FullName = profile?.FullName,
-                AvatarUrl = profile?.AvatarUrl,
-                Bio = profile?.Bio,
-                AccessibilityNeeds = profile?.AccessibilityNeeds,
-
-                TravelStyle = travelStyle,
-                Point = points
-            };
-        }
-
-        private static bool IsPortalRole(string role) =>
-            string.Equals(role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(role, AppRoles.Staff, StringComparison.OrdinalIgnoreCase);
+        if (refineVibesInBackground != null)
+            StartTravelStyleTextRefinement(userId, refineVibesInBackground);
     }
+
+    /// <summary>Mô tả ngắn sync từ danh sách vibe (đủ để embed tạm cho đến khi Gemini xong).</summary>
+    private static string BuildFallbackTravelStyleText(IReadOnlyList<string> styleStrings) =>
+        "Phong cach du lich: " + string.Join(", ", styleStrings);
+
+    /// <summary>Làm mịn travel_style_text bằng Gemini; không chặn HTTP request.</summary>
+    private void StartTravelStyleTextRefinement(Guid userId, IReadOnlyList<VibeType> vibes)
+    {
+        var vibesCopy = vibes.ToList();
+        _ = RefineTravelStyleTextAsync(userId, vibesCopy);
+    }
+
+    private async Task RefineTravelStyleTextAsync(Guid userId, List<VibeType> vibesCopy)
+    {
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var gen = scope.ServiceProvider.GetRequiredService<ITravelStyleTextGenerator>();
+            var repo = scope.ServiceProvider.GetRequiredService<IUserProfileRepository>();
+
+            var text = await gen.GenerateAsync(vibesCopy, CancellationToken.None);
+            if (string.IsNullOrEmpty(text))
+                return;
+
+            var p = await repo.GetByUserIdAsync(userId, CancellationToken.None);
+            if (p?.TravelStyle == null)
+                return;
+
+            var currentKey = string.Join("|", p.TravelStyle.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+            var expectedKey = string.Join("|", vibesCopy.Select(v => v.ToString()).OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+            if (!string.Equals(currentKey, expectedKey, StringComparison.Ordinal))
+                return;
+
+            p.TravelStyleText = text;
+            await repo.UpdateAsync(p, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Refine travel_style_text (Gemini) failed for user {UserId}", userId);
+        }
+    }
+
+    public async Task<ProfileResponse> GetProfileAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null)
+            throw new UnauthorizedAccessException("User không tồn tại hoặc không hợp lệ.");
+
+        var profile = await _userProfileRepository.GetByUserIdAsync(userId, cancellationToken);
+
+        var isPortalUser = IsPortalRole(user.Role);
+
+        List<VibeType>? travelStyle = null;
+        int? points = null;
+
+        if (!isPortalUser)
+        {
+            travelStyle = new List<VibeType>();
+            if (profile?.TravelStyle != null)
+            {
+                foreach (var s in profile.TravelStyle)
+                {
+                    if (Enum.TryParse<VibeType>(s, ignoreCase: true, out var vibe))
+                        travelStyle.Add(vibe);
+                }
+            }
+
+            points = profile?.RewardPoints ?? 0;
+        }
+
+        return new ProfileResponse
+        {
+            UserId = userId,
+            Role = user.Role,
+            Email = user.Email,
+            Phone = user.Phone,
+
+            FullName = profile?.FullName,
+            AvatarUrl = profile?.AvatarUrl,
+            Bio = profile?.Bio,
+            AccessibilityNeeds = profile?.AccessibilityNeeds,
+
+            TravelStyle = travelStyle,
+            Point = points
+        };
+    }
+
+    private static bool IsPortalRole(string role) =>
+        string.Equals(role, AppRoles.Admin, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(role, AppRoles.Staff, StringComparison.OrdinalIgnoreCase);
 }
