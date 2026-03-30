@@ -18,6 +18,7 @@ public class JourneyProgressService : IJourneyProgressService
     private readonly IRatingRepository _ratingRepository;
     private readonly IExperienceMetricRepository _experienceMetrics;
     private readonly IRewardService _rewardService;
+    private readonly IUserPackageRepository _userPackageRepository;
 
     public JourneyProgressService(
         IJourneyRepository journeyRepository,
@@ -25,7 +26,8 @@ public class JourneyProgressService : IJourneyProgressService
         IFeedbackRepository feedbackRepository,
         IRatingRepository ratingRepository,
         IExperienceMetricRepository experienceMetrics,
-        IRewardService rewardService)
+        IRewardService rewardService,
+        IUserPackageRepository userPackageRepository)
     {
         _journeyRepository = journeyRepository;
         _visitRepository = visitRepository;
@@ -33,6 +35,7 @@ public class JourneyProgressService : IJourneyProgressService
         _ratingRepository = ratingRepository;
         _experienceMetrics = experienceMetrics;
         _rewardService = rewardService;
+        _userPackageRepository = userPackageRepository;
     }
 
     public async Task<StartJourneyResponse?> StartJourneyAsync(Guid journeyId, Guid travelerId, CancellationToken cancellationToken = default)
@@ -95,6 +98,14 @@ public class JourneyProgressService : IJourneyProgressService
                 achievementId: null,
                 refId: journeyId,
                 refType: "journey");
+
+            var meters = journey.ActualDistanceMeters ?? journey.TotalDistanceMeters ?? 0;
+            var deltaKm = meters / 1000m;
+            await _userPackageRepository.AddUsedKmToActivePackageAsync(
+                travelerId,
+                deltaKm,
+                DateTime.UtcNow,
+                cancellationToken);
         }
 
         return new CompleteJourneyResponse
