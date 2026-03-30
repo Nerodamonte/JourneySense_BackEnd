@@ -61,4 +61,14 @@ public interface IGoongMapsService
         VehicleType vehicleType,
         List<Point>? waypoints = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Directions với <c>vehicle</c> theo Goong REST: car | bike | taxi | truck | hd. Null nếu tên không hợp lệ hoặc không có tuyến.
+    /// </summary>
+    Task<RouteContext?> GetDirectionRouteWithGoongVehicleAsync(
+        Point origin,
+        Point destination,
+        string goongVehicle,
+        List<Point>? waypoints = null,
+        CancellationToken cancellationToken = default);
 }

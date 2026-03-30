@@ -19,7 +19,7 @@ public class EmergencyController : ControllerBase
     }
 
     /// <summary>
-    /// FE: nút hư xe → type=repair_shop; chấn thương → hospital. Body tối thiểu: type, latitude, longitude. Mặc định 1 kết quả gần nhất.
+    /// FE: type = repair_shop | hospital | pharmacy | gas_station | restaurant | lodging | coffee (+ lat/lng). Mặc định 1 kết quả gần nhất.
     /// </summary>
     [HttpPost("nearby")]
     [Authorize]

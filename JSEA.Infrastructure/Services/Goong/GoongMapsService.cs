@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.DTOs.Respone.Place;
@@ -27,6 +28,20 @@ public class GoongMapsService : IGoongMapsService
         return $"{DefaultHost}/";
     }
 
+    /// <summary>Luôn dùng dấu chấm thập phân — tránh vi-VN (dấu phẩy) làm Goong Direction/Places lỗi hoặc ZERO_RESULTS.</summary>
+    private static string FormatLatLngForUrl(double latitude, double longitude) =>
+        latitude.ToString("F7", CultureInfo.InvariantCulture) + "," +
+        longitude.ToString("F7", CultureInfo.InvariantCulture);
+
+    private static int ReadJsonNumberAsInt32(JsonElement el)
+    {
+        if (el.ValueKind != JsonValueKind.Number) return 0;
+        if (el.TryGetInt32(out var i)) return i;
+        if (el.TryGetDouble(out var d)) return (int)Math.Round(d, MidpointRounding.AwayFromZero);
+        if (el.TryGetInt64(out var l)) return l > int.MaxValue ? int.MaxValue : (int)l;
+        return 0;
+    }
+
     public async Task<List<RouteContext>> AnalyzeRouteContextAsync(
         string originAddress,
         string destinationAddress,
@@ -35,7 +50,7 @@ public class GoongMapsService : IGoongMapsService
         int maxDetourDistanceMeters,
         CancellationToken cancellationToken = default)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpClientFactory.CreateClient(GoongOptions.HttpClientName);
         var key = _options.ApiKey;
         if (string.IsNullOrWhiteSpace(key))
             return new List<RouteContext>();
@@ -51,8 +66,8 @@ public class GoongMapsService : IGoongMapsService
         // 3. Direction
         var baseUrl = GetBaseUrl();
         var vehicle = MapVehicle(vehicleType);
-        var originStr = $"{originLoc.Value.lat},{originLoc.Value.lng}";
-        var destStr = $"{destLoc.Value.lat},{destLoc.Value.lng}";
+        var originStr = FormatLatLngForUrl(originLoc.Value.lat, originLoc.Value.lng);
+        var destStr = FormatLatLngForUrl(destLoc.Value.lat, destLoc.Value.lng);
         // Nếu cấu hình cho phép nhiều route, bật alternatives=true để Goong trả về nhiều tuyến (nếu có).
         var alternatives = _options.MaxRouteAlternatives > 1 ? "true" : "false";
         var url = $"{baseUrl}Direction?origin={Uri.EscapeDataString(originStr)}&destination={Uri.EscapeDataString(destStr)}&vehicle={vehicle}&alternatives={alternatives}&api_key={key}";
@@ -125,7 +140,7 @@ public class GoongMapsService : IGoongMapsService
         int maxDetourDistanceMeters,
         CancellationToken cancellationToken = default)
     {
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpClientFactory.CreateClient(GoongOptions.HttpClientName);
         var key = _options.ApiKey;
         if (string.IsNullOrWhiteSpace(key))
             return new List<RouteContext>();
@@ -133,8 +148,8 @@ public class GoongMapsService : IGoongMapsService
         var baseUrl = GetBaseUrl();
         var vehicle = MapVehicle(vehicleType);
 
-        var originStr = $"{originLatitude:G},{originLongitude:G}";
-        var destStr = $"{destinationLatitude:G},{destinationLongitude:G}";
+        var originStr = FormatLatLngForUrl(originLatitude, originLongitude);
+        var destStr = FormatLatLngForUrl(destinationLatitude, destinationLongitude);
         var alternatives = _options.MaxRouteAlternatives > 1 ? "true" : "false";
 
         var url =
@@ -203,7 +218,7 @@ public class GoongMapsService : IGoongMapsService
         if (string.IsNullOrWhiteSpace(address))
             return null;
 
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpClientFactory.CreateClient(GoongOptions.HttpClientName);
         var key = _options.ApiKey;
         if (string.IsNullOrWhiteSpace(key))
             return null;
@@ -226,7 +241,7 @@ public class GoongMapsService : IGoongMapsService
         if (string.IsNullOrWhiteSpace(input))
             return new List<PlaceSuggestionResponse>();
 
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpClientFactory.CreateClient(GoongOptions.HttpClientName);
         var key = _options.ApiKey;
         if (string.IsNullOrWhiteSpace(key))
             return new List<PlaceSuggestionResponse>();
@@ -234,7 +249,7 @@ public class GoongMapsService : IGoongMapsService
         var baseUrl = GetBaseUrl();
         var url = $"{baseUrl}Place/AutoComplete?api_key={Uri.EscapeDataString(key)}&input={Uri.EscapeDataString(input.Trim())}";
         if (latitude.HasValue && longitude.HasValue)
-            url += $"&location={latitude.Value:G},{longitude.Value:G}";
+            url += "&location=" + Uri.EscapeDataString(FormatLatLngForUrl(latitude.Value, longitude.Value));
         if (radiusMeters is > 0)
             url += $"&radius={radiusMeters.Value}";
         if (limit > 0 && limit <= 20)
@@ -289,7 +304,7 @@ public class GoongMapsService : IGoongMapsService
         if (string.IsNullOrWhiteSpace(placeId))
             return null;
 
-        var client = _httpClientFactory.CreateClient();
+        var client = _httpClientFactory.CreateClient(GoongOptions.HttpClientName);
         var key = _options.ApiKey;
         if (string.IsNullOrWhiteSpace(key))
             return null;
@@ -361,30 +376,42 @@ public class GoongMapsService : IGoongMapsService
         };
     }
 
-    public async Task<RouteContext?> GetDirectionRouteAsync(
+    public Task<RouteContext?> GetDirectionRouteAsync(
         Point origin,
         Point destination,
         VehicleType vehicleType,
         List<Point>? waypoints = null,
+        CancellationToken cancellationToken = default) =>
+        GetDirectionRouteWithGoongVehicleAsync(origin, destination, MapVehicle(vehicleType), waypoints, cancellationToken);
+
+    public async Task<RouteContext?> GetDirectionRouteWithGoongVehicleAsync(
+        Point origin,
+        Point destination,
+        string goongVehicle,
+        List<Point>? waypoints = null,
         CancellationToken cancellationToken = default)
     {
-        var client = _httpClientFactory.CreateClient();
+        if (string.IsNullOrWhiteSpace(goongVehicle) || !IsAllowedGoongVehicle(goongVehicle))
+            return null;
+
+        var client = _httpClientFactory.CreateClient(GoongOptions.HttpClientName);
         var key = _options.ApiKey;
         if (string.IsNullOrWhiteSpace(key))
             return null;
 
         var baseUrl = GetBaseUrl();
-        var vehicle = MapVehicle(vehicleType);
+        var vehicle = goongVehicle.Trim().ToLowerInvariant();
 
-        var originStr = $"{origin.Y:G},{origin.X:G}";
-        var destStr = $"{destination.Y:G},{destination.X:G}";
+        var originStr = FormatLatLngForUrl(origin.Y, origin.X);
+        var destStr = FormatLatLngForUrl(destination.Y, destination.X);
 
+        // alternatives=true: đôi khi có tuyến khi false trả rỗng. Chọn tuyến giống app Goong hơn: ưu tiên ít phút (Nhanh nhất), hòa thì km ngắn hơn — không chỉ “km nhất” (có thể chậm hơn).
         var url =
-            $"{baseUrl}Direction?origin={Uri.EscapeDataString(originStr)}&destination={Uri.EscapeDataString(destStr)}&vehicle={vehicle}&alternatives=false&api_key={key}";
+            $"{baseUrl}Direction?origin={Uri.EscapeDataString(originStr)}&destination={Uri.EscapeDataString(destStr)}&vehicle={Uri.EscapeDataString(vehicle)}&alternatives=true&api_key={Uri.EscapeDataString(key)}";
 
         if (waypoints is { Count: > 0 })
         {
-            var wpStr = string.Join("|", waypoints.Select(p => $"{p.Y:G},{p.X:G}"));
+            var wpStr = string.Join("|", waypoints.Select(p => FormatLatLngForUrl(p.Y, p.X)));
             url += $"&waypoints={Uri.EscapeDataString(wpStr)}";
         }
 
@@ -397,43 +424,76 @@ public class GoongMapsService : IGoongMapsService
         if (!root.TryGetProperty("routes", out var routes) || routes.GetArrayLength() == 0)
             return null;
 
-        var route = routes[0];
-        if (!route.TryGetProperty("legs", out var legs) || legs.GetArrayLength() == 0)
-            return null;
+        RouteContext? best = null;
+        var bestDurationSec = int.MaxValue;
+        var bestDistance = int.MaxValue;
 
-        var distanceMeters = 0;
-        var durationSeconds = 0;
-        foreach (var leg in legs.EnumerateArray())
+        for (var ri = 0; ri < routes.GetArrayLength(); ri++)
         {
-            distanceMeters += leg.GetProperty("distance").GetProperty("value").GetInt32();
-            durationSeconds += leg.GetProperty("duration").GetProperty("value").GetInt32();
+            var route = routes[ri];
+            if (!route.TryGetProperty("legs", out var legs) || legs.GetArrayLength() == 0)
+                continue;
+
+            var distanceMeters = 0;
+            var durationSeconds = 0;
+            foreach (var leg in legs.EnumerateArray())
+            {
+                if (!leg.TryGetProperty("distance", out var distEl) || !distEl.TryGetProperty("value", out var distVal))
+                    continue;
+                if (!leg.TryGetProperty("duration", out var durEl) || !durEl.TryGetProperty("value", out var durVal))
+                    continue;
+                if (distVal.ValueKind != JsonValueKind.Number || durVal.ValueKind != JsonValueKind.Number)
+                    continue;
+                distanceMeters += ReadJsonNumberAsInt32(distVal);
+                durationSeconds += ReadJsonNumberAsInt32(durVal);
+            }
+
+            if (distanceMeters <= 0 && durationSeconds <= 0)
+                continue;
+
+            if (durationSeconds > bestDurationSec ||
+                (durationSeconds == bestDurationSec && distanceMeters >= bestDistance))
+                continue;
+
+            bestDurationSec = durationSeconds;
+            bestDistance = distanceMeters;
+
+            var durationMinutes = durationSeconds <= 0
+                ? 1
+                : Math.Max(1, (int)Math.Ceiling(durationSeconds / 60.0));
+
+            LineString? routePath = null;
+            string? encoded = null;
+            if (route.TryGetProperty("overview_polyline", out var polylineEl) &&
+                polylineEl.TryGetProperty("points", out var pointsEl))
+            {
+                encoded = pointsEl.GetString();
+                if (!string.IsNullOrEmpty(encoded))
+                    routePath = DecodePolylineToLineString(encoded);
+            }
+
+            best = new RouteContext
+            {
+                RoutePath = routePath,
+                TotalDistanceMeters = distanceMeters,
+                EstimatedDurationMinutes = durationMinutes,
+                OriginLocation = origin,
+                DestinationLocation = destination,
+                OriginLatitude = origin.Y,
+                OriginLongitude = origin.X,
+                DestinationLatitude = destination.Y,
+                DestinationLongitude = destination.X,
+                Polyline = encoded
+            };
         }
 
-        var durationMinutes = (int)Math.Ceiling(durationSeconds / 60.0);
+        return best;
+    }
 
-        LineString? routePath = null;
-        string? encoded = null;
-        if (route.TryGetProperty("overview_polyline", out var polylineEl) &&
-            polylineEl.TryGetProperty("points", out var pointsEl))
-        {
-            encoded = pointsEl.GetString();
-            if (!string.IsNullOrEmpty(encoded))
-                routePath = DecodePolylineToLineString(encoded);
-        }
-
-        return new RouteContext
-        {
-            RoutePath = routePath,
-            TotalDistanceMeters = distanceMeters,
-            EstimatedDurationMinutes = durationMinutes,
-            OriginLocation = origin,
-            DestinationLocation = destination,
-            OriginLatitude = origin.Y,
-            OriginLongitude = origin.X,
-            DestinationLatitude = destination.Y,
-            DestinationLongitude = destination.X,
-            Polyline = encoded
-        };
+    private static bool IsAllowedGoongVehicle(string v)
+    {
+        var n = v.Trim().ToLowerInvariant();
+        return n is "car" or "bike" or "taxi" or "truck" or "hd";
     }
 
     private async Task<(double lat, double lng)?> GeocodeAsync(

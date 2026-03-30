@@ -44,9 +44,12 @@ public class JourneyDetailResponse
     public string? JourneyFeedbackModerationStatus { get; set; }
 
     /// <summary>
-    /// Main route geometry (WGS84) for reloading map after app restart.
+    /// Main route geometry (WGS84) — route_path hiện tại (sau chọn segment).
     /// </summary>
     public List<GeoPointResponse>? RoutePoints { get; set; }
+
+    /// <summary>Tuyến primary lúc setup (segment đầu trong route_segments), không đổi khi route_path bị ghi đè.</summary>
+    public List<GeoPointResponse>? SetupPrimaryRoutePoints { get; set; }
 
     /// <summary>
     /// All stored route segments (alternatives) created at setup.
