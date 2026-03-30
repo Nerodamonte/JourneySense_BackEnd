@@ -1,6 +1,7 @@
 using JSEA_Application.Constants;
 using JSEA_Application.DTOs.Request.Journey;
 using JSEA_Application.DTOs.Respone.Journey;
+using JSEA_Application.DTOs.Respone.Place;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using NetTopologySuite.Geometries;
@@ -17,11 +18,19 @@ public class EmergencyNearbyService : IEmergencyNearbyService
     /// <summary>Trần server: áp dụng dù client gửi 50km, tránh list 20–50 km như tìm kiếm toàn miền.</summary>
     private const int MaxRadiusMeters = 20000;
 
+    /// <summary>Sau khi có Place Detail, chỉ gọi Directions cho N ứng viên gần nhất (theo chim bay) — giống cảm giác “bệnh viện/nhà thuốc” gần trước, tránh tốn lượt Goong vào gợi ý xa.</summary>
+    private static int MaxCandidatesToRoute(int maxResults) =>
+        Math.Min(20, Math.Max(10, maxResults * 3));
+
     public EmergencyNearbyService(IGoongMapsService goongMaps)
     {
         _goongMaps = goongMaps;
     }
 
+    /// <summary>
+    /// Một luồng duy nhất cho mọi type (repair_shop … coffee): Autocomplete keyword khác nhau trong <see cref="EmergencyPlaceTypes.SearchInputFor"/>,
+    /// còn Detail + Directions + fallback đường chim y hệt hospital/pharmacy.
+    /// </summary>
     public async Task<(int StatusCode, string? ErrorMessage, IReadOnlyList<EmergencyNearbyItemResponse> Items)> GetNearbyAsync(
         EmergencyNearbyRequest request,
         CancellationToken cancellationToken = default)
@@ -57,10 +66,11 @@ public class EmergencyNearbyService : IEmergencyNearbyService
             return (200, null, Array.Empty<EmergencyNearbyItemResponse>());
 
         var vehicle = ResolveVehicleForDirections(request.VehicleType);
-        var origin = SnapPoint(request.Longitude, request.Latitude);
+        // Không SnapPoint — làm tròn 6 số có thể đẩy điểm ra khỏi graph đường Goong.
+        var origin = new Point(request.Longitude, request.Latitude) { SRID = 4326 };
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var rows = new List<EmergencyNearbyItemResponse>();
+        var withCrow = new List<(PlaceDetailResponse Detail, double Crow, double CrowRounded)>();
 
         foreach (var s in suggestions)
         {
@@ -80,9 +90,25 @@ public class EmergencyNearbyService : IEmergencyNearbyService
             if (crowRounded > crowCapMeters)
                 continue;
 
-            var dest = SnapPoint(detail.Longitude.Value, detail.Latitude.Value);
-            // Goong Direction đôi khi không trả routes cho một vehicle; thử lần lượt car/motorbike/...
-            var route = await GetDirectionFirstSuccessfulAsync(origin, dest, vehicle, cancellationToken);
+            withCrow.Add((detail, crow, crowRounded));
+        }
+
+        if (withCrow.Count == 0)
+            return (200, null, Array.Empty<EmergencyNearbyItemResponse>());
+
+        // Cùng chiến lược cho mọi type: xin chỉ đường trước cho các điểm gần nhất (theo chim bay), rồi mới xa dần.
+        var routingQueue = withCrow
+            .OrderBy(x => x.Crow)
+            .Take(MaxCandidatesToRoute(maxResults))
+            .ToList();
+
+        var rows = new List<EmergencyNearbyItemResponse>();
+
+        foreach (var (detail, _, crowRounded) in routingQueue)
+        {
+            var dest = new Point(detail.Longitude!.Value, detail.Latitude!.Value) { SRID = 4326 };
+            var route = await GoongDirectionVehicleFallback.GetDirectionFirstSuccessfulAsync(
+                _goongMaps, origin, dest, vehicle, waypoints: null, cancellationToken);
 
             double distanceDisplay;
             int? durationMin = null;
@@ -120,7 +146,6 @@ public class EmergencyNearbyService : IEmergencyNearbyService
                 OpeningHoursSummary = detail.OpeningHoursSummary,
                 OpenNow = detail.OpenNow
             });
-
         }
 
         var ordered = rows
@@ -130,36 +155,6 @@ public class EmergencyNearbyService : IEmergencyNearbyService
 
         return (200, null, ordered);
     }
-
-    private async Task<RouteContext?> GetDirectionFirstSuccessfulAsync(
-        Point origin,
-        Point dest,
-        VehicleType primary,
-        CancellationToken cancellationToken)
-    {
-        foreach (var v in VehicleFallbackChain(primary))
-        {
-            var route = await _goongMaps.GetDirectionRouteAsync(origin, dest, v, null, cancellationToken);
-            if (route != null)
-                return route;
-        }
-
-        return null;
-    }
-
-    /// <summary>Thứ tự ưu tiên: xe user chọn → motorbike → car → bicycle → walking (Goong map walking→bike).</summary>
-    private static IEnumerable<VehicleType> VehicleFallbackChain(VehicleType primary)
-    {
-        yield return primary;
-        foreach (var v in new[] { VehicleType.Motorbike, VehicleType.Car, VehicleType.Bicycle, VehicleType.Walking })
-        {
-            if (v != primary)
-                yield return v;
-        }
-    }
-
-    private static Point SnapPoint(double longitude, double latitude) =>
-        new(Math.Round(longitude, 6), Math.Round(latitude, 6)) { SRID = 4326 };
 
     /// <summary>Swagger/OpenAPI hay để mặc định "string" — không được dùng làm từ khóa Goong.</summary>
     private static string ResolveSearchInput(string placeType, string? placeKeyword, string? vehicleType)
@@ -238,7 +233,7 @@ public class EmergencyNearbyService : IEmergencyNearbyService
             return true;
         }
 
-        error = "type phải là repair_shop, hospital hoặc pharmacy.";
+        error = "type phải là repair_shop, hospital, pharmacy, gas_station, restaurant, lodging hoặc coffee.";
         return false;
     }
 

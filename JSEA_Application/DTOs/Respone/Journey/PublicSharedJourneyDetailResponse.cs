@@ -23,6 +23,12 @@ public class PublicSharedJourneyDetailResponse
 
     public string? JourneyFeedback { get; set; }
 
+    /// <summary>Tuyến chính user đã chọn (journeys.route_path), sau khi lưu waypoint / chọn segment — dùng để replay chuyến.</summary>
+    public List<GeoPointResponse>? RoutePoints { get; set; }
+
+    /// <summary>Tuyến primary lúc setup (route_segments segment_order = 1), trước khi ghi đè route_path — O→D gợi ý ban đầu.</summary>
+    public List<GeoPointResponse>? SetupPrimaryRoutePoints { get; set; }
+
     public List<PublicSharedJourneyWaypointResponse> Waypoints { get; set; } = new();
 }
 

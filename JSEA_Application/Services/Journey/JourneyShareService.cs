@@ -3,6 +3,7 @@ using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
+using JourneyEntity = JSEA_Application.Models.Journey;
 
 namespace JSEA_Application.Services.Journey;
 
@@ -19,6 +20,10 @@ public class JourneyShareService : IJourneyShareService
     private readonly IVisitRepository _visitRepository;
     private readonly IFeedbackRepository _feedbackRepository;
     private readonly IRatingRepository _ratingRepository;
+    private readonly IGoongMapsService _goongMapsService;
+
+    /// <summary>Đủ điểm trên LineString đã lưu → không cần gọi lại Directions.</summary>
+    private const int MinStoredRouteVerticesForShare = 4;
 
     public JourneyShareService(
         IJourneyRepository journeyRepository,
@@ -28,7 +33,8 @@ public class JourneyShareService : IJourneyShareService
         IUserProfileRepository userProfileRepository,
         IVisitRepository visitRepository,
         IFeedbackRepository feedbackRepository,
-        IRatingRepository ratingRepository)
+        IRatingRepository ratingRepository,
+        IGoongMapsService goongMapsService)
     {
         _journeyRepository = journeyRepository;
         _sharedJourneyRepository = sharedJourneyRepository;
@@ -38,6 +44,7 @@ public class JourneyShareService : IJourneyShareService
         _visitRepository = visitRepository;
         _feedbackRepository = feedbackRepository;
         _ratingRepository = ratingRepository;
+        _goongMapsService = goongMapsService;
     }
 
     public async Task<ShareJourneyResponse?> ShareJourneyAsync(
@@ -231,6 +238,8 @@ public class JourneyShareService : IJourneyShareService
             FeedbackModerationStatuses.Approved,
             StringComparison.OrdinalIgnoreCase);
 
+        var routePoints = await ResolveShareDisplayRouteAsync(j, cancellationToken);
+
         return new PublicSharedJourneyDetailResponse
         {
             ShareCode = row.ShareCode,
@@ -244,8 +253,41 @@ public class JourneyShareService : IJourneyShareService
             CompletedAt = j.CompletedAt,
             ViewCount = row.ViewCount,
             JourneyFeedback = journeyFbPublic ? j.JourneyFeedback : null,
+            RoutePoints = routePoints,
+            SetupPrimaryRoutePoints = JourneyRoutePointsHelper.SetupPrimaryRouteFromSegments(j),
             Waypoints = waypointResponses
         };
+    }
+
+    /// <summary>
+    /// Ưu tiên polyline đã lưu trên journey; nếu thiếu/không đủ chi tiết thì gọi Goong Directions origin→destination để FE vẽ đúng tuyến.
+    /// </summary>
+    private async Task<List<GeoPointResponse>?> ResolveShareDisplayRouteAsync(
+        JourneyEntity j,
+        CancellationToken cancellationToken)
+    {
+        var storedCount = j.RoutePath?.Coordinates?.Length ?? 0;
+        if (storedCount >= MinStoredRouteVerticesForShare)
+            return JourneyRoutePointsHelper.FromJourney(j);
+
+        if (j.OriginLocation != null && j.DestinationLocation != null)
+        {
+            var vehicle = Enum.TryParse<VehicleType>(j.VehicleType, true, out var vt)
+                ? vt
+                : VehicleType.Motorbike;
+            var directed = await GoongDirectionVehicleFallback.GetDirectionFirstSuccessfulAsync(
+                _goongMapsService,
+                j.OriginLocation,
+                j.DestinationLocation,
+                vehicle,
+                waypoints: null,
+                cancellationToken);
+            var fromGoong = JourneyRoutePointsHelper.FromRouteContext(directed);
+            if (fromGoong is { Count: >= 2 })
+                return fromGoong;
+        }
+
+        return JourneyRoutePointsHelper.FromJourney(j);
     }
 
     private async Task<string> GenerateUniqueShareCodeAsync(CancellationToken cancellationToken)
