@@ -10,10 +10,12 @@ public class VibeQuizService : IVibeQuizService
 {
     private const string QuizId = "vibe-v1";
     private readonly IUserProfileService _userProfileService;
+    private readonly IUserRepository _userRepository;
 
-    public VibeQuizService(IUserProfileService userProfileService)
+    public VibeQuizService(IUserProfileService userProfileService, IUserRepository userRepository)
     {
         _userProfileService = userProfileService;
+        _userRepository = userRepository;
     }
 
     public VibeQuizResponse GetQuiz()
@@ -163,6 +165,14 @@ public class VibeQuizService : IVibeQuizService
                 userId,
                 new UpdateProfileRequest { TravelStyle = vibes },
                 cancellationToken);
+        }
+
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user != null)
+        {
+            user.VibeQuizCompletedAt = DateTime.UtcNow;
+            user.UpdatedAt = DateTime.UtcNow;
+            await _userRepository.UpdateAsync(user);
         }
 
         return new SubmitVibeQuizResponse

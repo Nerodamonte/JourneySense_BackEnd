@@ -129,6 +129,17 @@ public class UserProfileService : IUserProfileService
         else
             await _userProfileRepository.UpdateAsync(profile, cancellationToken);
 
+        // Skip quiz nhưng tự chọn travel style trên profile ⇒ coi như đã onboarding (giống submit quiz).
+        if (!isPortalUser
+            && string.Equals(userForRole.Role, AppRoles.Traveler, StringComparison.OrdinalIgnoreCase)
+            && profile.TravelStyle is { Count: > 0 }
+            && !userForRole.VibeQuizCompletedAt.HasValue)
+        {
+            userForRole.VibeQuizCompletedAt = DateTime.UtcNow;
+            userForRole.UpdatedAt = DateTime.UtcNow;
+            await _userRepository.UpdateAsync(userForRole);
+        }
+
         if (refineVibesInBackground != null)
             StartTravelStyleTextRefinement(userId, refineVibesInBackground);
     }
@@ -204,6 +215,13 @@ public class UserProfileService : IUserProfileService
             points = profile?.RewardPoints ?? 0;
         }
 
+        bool? requiresVibeQuiz = null;
+        if (string.Equals(user.Role, AppRoles.Traveler, StringComparison.OrdinalIgnoreCase))
+        {
+            var hasStyles = profile?.TravelStyle != null && profile.TravelStyle.Count > 0;
+            requiresVibeQuiz = !user.VibeQuizCompletedAt.HasValue && !hasStyles;
+        }
+
         return new ProfileResponse
         {
             UserId = userId,
@@ -217,7 +235,8 @@ public class UserProfileService : IUserProfileService
             AccessibilityNeeds = profile?.AccessibilityNeeds,
 
             TravelStyle = travelStyle,
-            Point = points
+            Point = points,
+            RequiresVibeQuiz = requiresVibeQuiz
         };
     }
 

@@ -1233,6 +1233,10 @@ namespace JSEA_Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_login_at");
 
+                    b.Property<DateTime?>("VibeQuizCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("vibe_quiz_completed_at");
+
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
