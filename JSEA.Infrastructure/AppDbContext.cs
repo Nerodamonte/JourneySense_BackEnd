@@ -47,6 +47,8 @@ public partial class AppDbContext : DbContext
     public virtual DbSet<UserProfile> UserProfiles { get; set; }
     public virtual DbSet<Visit> Visits { get; set; }
     public virtual DbSet<SharedJourney> SharedJourneys { get; set; }
+    public virtual DbSet<JourneyMember> JourneyMembers { get; set; }
+    public virtual DbSet<JourneyWaypointMemberProgress> JourneyWaypointMemberProgresses { get; set; }
     public virtual DbSet<Achievement> Achievements { get; set; }
     public virtual DbSet<RewardTransaction> RewardTransactions { get; set; }
 
@@ -220,6 +222,38 @@ public partial class AppDbContext : DbContext
             entity.HasOne(d => d.User).WithMany(p => p.SharedJourneys)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_shared_journey_user");
+        });
+
+        modelBuilder.Entity<JourneyMember>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("journey_members_pkey");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.JoinedAt).HasDefaultValueSql("now()");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.IsRegisteredUser).HasDefaultValue(true);
+            entity.HasIndex(e => e.JourneyId);
+            entity.HasIndex(e => e.TravelerId);
+            entity.HasOne(d => d.Journey).WithMany(p => p.JourneyMembers)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_journey_members_journey");
+            entity.HasOne(d => d.Traveler).WithMany()
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_journey_members_traveler");
+        });
+
+        modelBuilder.Entity<JourneyWaypointMemberProgress>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("journey_waypoint_member_progress_pkey");
+            entity.Property(e => e.Id).HasDefaultValueSql("gen_random_uuid()");
+            entity.Property(e => e.Skipped).HasDefaultValue(false);
+            entity.HasIndex(e => e.JourneyMemberId);
+            entity.HasIndex(e => new { e.JourneyMemberId, e.JourneyWaypointId, e.MilestoneKind });
+            entity.HasOne(d => d.JourneyMember).WithMany(p => p.WaypointProgress)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_wp_progress_member");
+            entity.HasOne(d => d.JourneyWaypoint).WithMany()
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_wp_progress_waypoint");
         });
 
         modelBuilder.Entity<Achievement>(entity =>

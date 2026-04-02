@@ -78,14 +78,27 @@ public class JourneyRepository : IJourneyRepository
         Guid travelerId,
         CancellationToken cancellationToken = default)
     {
+        var journey = await _context.Journeys.AsNoTracking()
+            .FirstOrDefaultAsync(j => j.Id == journeyId, cancellationToken);
+        if (journey == null) return null;
+
+        var allowed = journey.TravelerId == travelerId
+                      || await _context.JourneyMembers.AnyAsync(m =>
+                          m.JourneyId == journeyId && m.TravelerId == travelerId && m.IsActive, cancellationToken);
+        if (!allowed) return null;
+
         return await _context.JourneyWaypoints
             .Include(w => w.Journey)
-            .FirstOrDefaultAsync(w =>
-                w.Id == waypointId &&
-                w.JourneyId == journeyId &&
-                w.Journey.TravelerId == travelerId,
-                cancellationToken);
+            .FirstOrDefaultAsync(w => w.Id == waypointId && w.JourneyId == journeyId, cancellationToken);
     }
+
+    public async Task<JourneyWaypoint?> GetWaypointForJourneyAsync(
+        Guid journeyId,
+        Guid waypointId,
+        CancellationToken cancellationToken = default) =>
+        await _context.JourneyWaypoints
+            .Include(w => w.Journey)
+            .FirstOrDefaultAsync(w => w.Id == waypointId && w.JourneyId == journeyId, cancellationToken);
 
     public async Task<Journey> UpdateAsync(Journey journey, CancellationToken cancellationToken = default)
     {

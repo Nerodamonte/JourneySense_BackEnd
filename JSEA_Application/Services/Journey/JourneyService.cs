@@ -6,6 +6,7 @@ using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
 using NetTopologySuite.Geometries;
 using UserPackageEntity = JSEA_Application.Models.UserPackage;
+using JourneyEntity = JSEA_Application.Models.Journey;
 
 namespace JSEA_Application.Services.Journey;
 
@@ -18,6 +19,7 @@ public class JourneyService : IJourneyService
     private readonly IVisitRepository _visitRepository;
     private readonly IUserPackageRepository _userPackageRepository;
     private readonly IPackageRepository _packageRepository;
+    private readonly IJourneyMemberRepository _journeyMemberRepository;
 
     public JourneyService(
         IJourneyRepository journeyRepository,
@@ -26,7 +28,8 @@ public class JourneyService : IJourneyService
         IExperienceEmbeddingRepository embeddingRepository,
         IVisitRepository visitRepository,
         IUserPackageRepository userPackageRepository,
-        IPackageRepository packageRepository)
+        IPackageRepository packageRepository,
+        IJourneyMemberRepository journeyMemberRepository)
     {
         _journeyRepository = journeyRepository;
         _goongMapsService = goongMapsService;
@@ -35,6 +38,40 @@ public class JourneyService : IJourneyService
         _visitRepository = visitRepository;
         _userPackageRepository = userPackageRepository;
         _packageRepository = packageRepository;
+        _journeyMemberRepository = journeyMemberRepository;
+    }
+
+    private static async Task EnsureTravelerCanNavigateJourneyAsync(
+        JourneyEntity journey,
+        Guid travelerId,
+        IJourneyMemberRepository members,
+        CancellationToken cancellationToken)
+    {
+        if (journey.TravelerId == travelerId) return;
+        var member = await members.GetActiveByTravelerAsync(journey.Id, travelerId, cancellationToken);
+        if (member != null) return;
+        throw new UnauthorizedAccessException("Không có quyền truy cập hành trình.");
+    }
+
+    private static async Task EnsureGuestCanNavigateJourneyAsync(
+        JourneyEntity journey,
+        Guid guestKey,
+        IJourneyMemberRepository members,
+        CancellationToken cancellationToken)
+    {
+        var member = await members.GetActiveByGuestKeyAsync(journey.Id, guestKey, cancellationToken);
+        if (member != null) return;
+        throw new UnauthorizedAccessException("Không có quyền truy cập hành trình.");
+    }
+
+    private static bool WaypointIncompleteForViewer(
+        bool viewerIsOwner,
+        JourneyWaypoint w,
+        HashSet<Guid>? memberWaypointDone)
+    {
+        if (viewerIsOwner)
+            return w.ActualDepartureAt == null;
+        return memberWaypointDone == null || !memberWaypointDone.Contains(w.Id);
     }
 
     private static int EstimateDetourMinutes(int detourMeters, string vehicleType)
@@ -463,8 +500,26 @@ public class JourneyService : IJourneyService
         var journey = await _journeyRepository.GetByIdAsync(journeyId, cancellationToken);
         if (journey == null)
             throw new KeyNotFoundException("Không tìm thấy hành trình.");
-        if (journey.TravelerId != travelerId)
-            throw new UnauthorizedAccessException("Không có quyền truy cập hành trình.");
+        await EnsureTravelerCanNavigateJourneyAsync(journey, travelerId, _journeyMemberRepository, cancellationToken);
+        return await BuildFullJourneyPolylineAsync(journey, cancellationToken);
+    }
+
+    public async Task<JourneyPolylineResponse?> GetJourneyPolylineForGuestAsync(
+        Guid journeyId,
+        Guid guestKey,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetByIdAsync(journeyId, cancellationToken);
+        if (journey == null)
+            throw new KeyNotFoundException("Không tìm thấy hành trình.");
+        await EnsureGuestCanNavigateJourneyAsync(journey, guestKey, _journeyMemberRepository, cancellationToken);
+        return await BuildFullJourneyPolylineAsync(journey, cancellationToken);
+    }
+
+    private async Task<JourneyPolylineResponse?> BuildFullJourneyPolylineAsync(
+        JourneyEntity journey,
+        CancellationToken cancellationToken)
+    {
         if (journey.OriginLocation == null || journey.DestinationLocation == null)
             throw new InvalidOperationException("Hành trình thiếu tọa độ origin/destination.");
 
@@ -535,12 +590,85 @@ public class JourneyService : IJourneyService
         var journey = await _journeyRepository.GetByIdAsync(journeyId, cancellationToken);
         if (journey == null)
             throw new KeyNotFoundException("Không tìm thấy hành trình.");
-        if (journey.TravelerId != travelerId)
-            throw new UnauthorizedAccessException("Không có quyền truy cập hành trình.");
+        await EnsureTravelerCanNavigateJourneyAsync(journey, travelerId, _journeyMemberRepository, cancellationToken);
 
+        var viewerIsOwner = journey.TravelerId == travelerId;
+        HashSet<Guid>? memberWaypointDone = null;
+        if (!viewerIsOwner)
+        {
+            var mem = await _journeyMemberRepository.GetActiveByTravelerAsync(journey.Id, travelerId, cancellationToken);
+            if (mem != null)
+            {
+                memberWaypointDone = await BuildMemberWaypointDoneSetAsync(mem.Id, cancellationToken);
+            }
+        }
+
+        return await GetNearestWaypointPolylineCoreAsync(
+            journey,
+            viewerIsOwner,
+            memberWaypointDone,
+            currentLatitude,
+            currentLongitude,
+            excludeCompletedWaypoints,
+            cancellationToken);
+    }
+
+    public async Task<JourneyPolylineResponse?> GetNearestWaypointPolylineForGuestAsync(
+        Guid journeyId,
+        Guid guestKey,
+        double currentLatitude,
+        double currentLongitude,
+        bool excludeCompletedWaypoints = true,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetByIdAsync(journeyId, cancellationToken);
+        if (journey == null)
+            throw new KeyNotFoundException("Không tìm thấy hành trình.");
+        await EnsureGuestCanNavigateJourneyAsync(journey, guestKey, _journeyMemberRepository, cancellationToken);
+
+        var mem = await _journeyMemberRepository.GetActiveByGuestKeyAsync(journey.Id, guestKey, cancellationToken);
+        var memberWaypointDone = mem != null
+            ? await BuildMemberWaypointDoneSetAsync(mem.Id, cancellationToken)
+            : null;
+
+        return await GetNearestWaypointPolylineCoreAsync(
+            journey,
+            viewerIsOwner: false,
+            memberWaypointDone,
+            currentLatitude,
+            currentLongitude,
+            excludeCompletedWaypoints,
+            cancellationToken);
+    }
+
+    private static async Task<HashSet<Guid>> BuildMemberWaypointDoneSetAsync(
+        Guid journeyMemberId,
+        IJourneyMemberRepository members,
+        CancellationToken cancellationToken)
+    {
+        var plist = await members.GetProgressForMemberAsync(journeyMemberId, cancellationToken);
+        return plist
+            .Where(p => p.MilestoneKind == JourneyMilestoneKinds.Waypoint && p.JourneyWaypointId.HasValue)
+            .Where(p => p.ArrivedAt.HasValue || p.DepartedAt.HasValue || p.Skipped)
+            .Select(p => p.JourneyWaypointId!.Value)
+            .ToHashSet();
+    }
+
+    private Task<HashSet<Guid>> BuildMemberWaypointDoneSetAsync(Guid journeyMemberId, CancellationToken cancellationToken) =>
+        BuildMemberWaypointDoneSetAsync(journeyMemberId, _journeyMemberRepository, cancellationToken);
+
+    private async Task<JourneyPolylineResponse?> GetNearestWaypointPolylineCoreAsync(
+        JourneyEntity journey,
+        bool viewerIsOwner,
+        HashSet<Guid>? memberWaypointDone,
+        double currentLatitude,
+        double currentLongitude,
+        bool excludeCompletedWaypoints,
+        CancellationToken cancellationToken)
+    {
         var candidates = journey.JourneyWaypoints
             ?.Where(w => w.Experience?.Location != null)
-            .Where(w => !excludeCompletedWaypoints || w.ActualDepartureAt == null)
+            .Where(w => !excludeCompletedWaypoints || WaypointIncompleteForViewer(viewerIsOwner, w, memberWaypointDone))
             .Select(w => new WaypointCandidate(w, w.Experience!.Location!))
             .ToList() ?? new List<WaypointCandidate>();
 
@@ -659,6 +787,84 @@ public class JourneyService : IJourneyService
             DistanceMeters = route.TotalDistanceMeters,
             EstimatedDurationMinutes = route.EstimatedDurationMinutes
         };
+    }
+
+    public async Task<JourneyWaypointAttendanceResponse?> GetWaypointAttendanceAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetBasicByIdAsync(journeyId, cancellationToken);
+        if (journey == null)
+            return null;
+
+        await EnsureTravelerCanNavigateJourneyAsync(journey, travelerId, _journeyMemberRepository, cancellationToken);
+        return await _journeyMemberRepository.GetWaypointAttendanceAsync(journeyId, cancellationToken);
+    }
+
+    public async Task<JourneyWaypointAttendanceResponse?> GetWaypointAttendanceForGuestAsync(
+        Guid journeyId,
+        Guid guestKey,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetBasicByIdAsync(journeyId, cancellationToken);
+        if (journey == null)
+            return null;
+
+        await EnsureGuestCanNavigateJourneyAsync(journey, guestKey, _journeyMemberRepository, cancellationToken);
+        return await _journeyMemberRepository.GetWaypointAttendanceAsync(journeyId, cancellationToken);
+    }
+
+    public async Task VerifyTravelerCanNavigateJourneyAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetBasicByIdAsync(journeyId, cancellationToken);
+        if (journey == null)
+            throw new KeyNotFoundException("Không tìm thấy hành trình.");
+
+        await EnsureTravelerCanNavigateJourneyAsync(journey, travelerId, _journeyMemberRepository, cancellationToken);
+    }
+
+    public async Task VerifyTravelerCanNavigateStartedJourneyAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetBasicByIdAsync(journeyId, cancellationToken);
+        if (journey == null)
+            throw new KeyNotFoundException("Không tìm thấy hành trình.");
+
+        await EnsureTravelerCanNavigateJourneyAsync(journey, travelerId, _journeyMemberRepository, cancellationToken);
+        if (!journey.StartedAt.HasValue)
+            throw new InvalidOperationException("Hành trình chưa bắt đầu, không thể thông báo nhóm.");
+    }
+
+    public async Task VerifyGuestCanNavigateJourneyAsync(
+        Guid journeyId,
+        Guid guestKey,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetBasicByIdAsync(journeyId, cancellationToken);
+        if (journey == null)
+            throw new KeyNotFoundException("Không tìm thấy hành trình.");
+
+        await EnsureGuestCanNavigateJourneyAsync(journey, guestKey, _journeyMemberRepository, cancellationToken);
+    }
+
+    public async Task VerifyGuestCanNavigateStartedJourneyAsync(
+        Guid journeyId,
+        Guid guestKey,
+        CancellationToken cancellationToken = default)
+    {
+        var journey = await _journeyRepository.GetBasicByIdAsync(journeyId, cancellationToken);
+        if (journey == null)
+            throw new KeyNotFoundException("Không tìm thấy hành trình.");
+
+        await EnsureGuestCanNavigateJourneyAsync(journey, guestKey, _journeyMemberRepository, cancellationToken);
+        if (!journey.StartedAt.HasValue)
+            throw new InvalidOperationException("Hành trình chưa bắt đầu, không thể thông báo nhóm.");
     }
 
     public async Task<bool> UpdateJourneyFeedbackAsync(

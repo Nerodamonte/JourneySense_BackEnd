@@ -119,4 +119,7 @@ public partial class Journey
 
     [InverseProperty("Journey")]
     public virtual ICollection<SharedJourney> SharedJourneys { get; set; } = new List<SharedJourney>();
+
+    [InverseProperty("Journey")]
+    public virtual ICollection<JourneyMember> JourneyMembers { get; set; } = new List<JourneyMember>();
 }
