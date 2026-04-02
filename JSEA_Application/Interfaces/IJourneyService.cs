@@ -80,4 +80,57 @@ public interface IJourneyService
         double currentLongitude,
         bool excludeCompletedWaypoints = true,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Member khách (guest_key): cùng logic polyline toàn tuyến như user đăng nhập.</summary>
+    Task<JourneyPolylineResponse?> GetJourneyPolylineForGuestAsync(
+        Guid journeyId,
+        Guid guestKey,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Member khách: tuyến từ GPS hiện tại tới waypoint kế tiếp (theo tiến độ của chính khách).</summary>
+    Task<JourneyPolylineResponse?> GetNearestWaypointPolylineForGuestAsync(
+        Guid journeyId,
+        Guid guestKey,
+        double currentLatitude,
+        double currentLongitude,
+        bool excludeCompletedWaypoints = true,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Đếm x/N từng waypoint (N = thành viên active). Owner hoặc member đã join.
+    /// </summary>
+    Task<JourneyWaypointAttendanceResponse?> GetWaypointAttendanceAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Giống <see cref="GetWaypointAttendanceAsync"/> cho khách đã join bằng guest_key.</summary>
+    Task<JourneyWaypointAttendanceResponse?> GetWaypointAttendanceForGuestAsync(
+        Guid journeyId,
+        Guid guestKey,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Chủ hoặc member active; nếu không thấy journey hoặc không có quyền → throw.</summary>
+    Task VerifyTravelerCanNavigateJourneyAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Member khách active trên journey; throw nếu không hợp lệ.</summary>
+    Task VerifyGuestCanNavigateJourneyAsync(
+        Guid journeyId,
+        Guid guestKey,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Giống <see cref="VerifyTravelerCanNavigateJourneyAsync"/> và bắt buộc journey đã start (cho SignalR).</summary>
+    Task VerifyTravelerCanNavigateStartedJourneyAsync(
+        Guid journeyId,
+        Guid travelerId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>Giống <see cref="VerifyTravelerCanNavigateStartedJourneyAsync"/> cho khách.</summary>
+    Task VerifyGuestCanNavigateStartedJourneyAsync(
+        Guid journeyId,
+        Guid guestKey,
+        CancellationToken cancellationToken = default);
 }

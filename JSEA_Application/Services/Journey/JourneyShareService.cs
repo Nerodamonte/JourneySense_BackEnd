@@ -1,9 +1,12 @@
 using JSEA_Application.Constants;
+using JSEA_Application.DTOs.Request.Journey;
 using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.Enums;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Models;
+using JSEA_Application.Options;
 using JourneyEntity = JSEA_Application.Models.Journey;
+using Microsoft.Extensions.Options;
 
 namespace JSEA_Application.Services.Journey;
 
@@ -21,6 +24,8 @@ public class JourneyShareService : IJourneyShareService
     private readonly IFeedbackRepository _feedbackRepository;
     private readonly IRatingRepository _ratingRepository;
     private readonly IGoongMapsService _goongMapsService;
+    private readonly IJourneyMemberRepository _journeyMemberRepository;
+    private readonly JourneyShareOptions _journeyShareOptions;
 
     /// <summary>Đủ điểm trên LineString đã lưu → không cần gọi lại Directions.</summary>
     private const int MinStoredRouteVerticesForShare = 4;
@@ -34,7 +39,9 @@ public class JourneyShareService : IJourneyShareService
         IVisitRepository visitRepository,
         IFeedbackRepository feedbackRepository,
         IRatingRepository ratingRepository,
-        IGoongMapsService goongMapsService)
+        IGoongMapsService goongMapsService,
+        IJourneyMemberRepository journeyMemberRepository,
+        IOptions<JourneyShareOptions> journeyShareOptions)
     {
         _journeyRepository = journeyRepository;
         _sharedJourneyRepository = sharedJourneyRepository;
@@ -45,6 +52,8 @@ public class JourneyShareService : IJourneyShareService
         _feedbackRepository = feedbackRepository;
         _ratingRepository = ratingRepository;
         _goongMapsService = goongMapsService;
+        _journeyMemberRepository = journeyMemberRepository;
+        _journeyShareOptions = journeyShareOptions?.Value ?? new JourneyShareOptions();
     }
 
     public async Task<ShareJourneyResponse?> ShareJourneyAsync(
@@ -67,6 +76,7 @@ public class JourneyShareService : IJourneyShareService
             {
                 ShareCode = existing.ShareCode,
                 SharePath = $"/api/journeys/shared/{existing.ShareCode}",
+                ShareLink = BuildClientJoinLink(existing.ShareCode),
                 PointsEarned = 0
             };
         }
@@ -98,8 +108,36 @@ public class JourneyShareService : IJourneyShareService
         {
             ShareCode = shareCode,
             SharePath = $"/api/journeys/shared/{shareCode}",
+            ShareLink = BuildClientJoinLink(shareCode),
             PointsEarned = points
         };
+    }
+
+    /// <summary>Link mở frontend / app; join thật vẫn qua API (cần token hoặc guest body).</summary>
+    private string? BuildClientJoinLink(string shareCode)
+    {
+        var baseUrl = _journeyShareOptions.PublicAppBaseUrl?.Trim();
+        if (string.IsNullOrEmpty(baseUrl))
+            return null;
+
+        var fmt = string.IsNullOrWhiteSpace(_journeyShareOptions.JoinPathFormat)
+            ? "/join/{0}"
+            : _journeyShareOptions.JoinPathFormat.Trim();
+
+        string path;
+        try
+        {
+            path = string.Format(fmt, Uri.EscapeDataString(shareCode));
+        }
+        catch (FormatException)
+        {
+            path = $"/join/{Uri.EscapeDataString(shareCode)}";
+        }
+
+        if (!path.StartsWith('/'))
+            path = '/' + path;
+
+        return baseUrl.TrimEnd('/') + path;
     }
 
     public async Task<PublicSharedJourneyResponse?> GetPublicByShareCodeAsync(
@@ -288,6 +326,124 @@ public class JourneyShareService : IJourneyShareService
         }
 
         return JourneyRoutePointsHelper.FromJourney(j);
+    }
+
+    public async Task<JoinJourneyResponse?> JoinByShareCodeAsync(
+        string shareCode,
+        Guid travelerId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shareCode)) return null;
+
+        var row = await _sharedJourneyRepository.GetByShareCodeWithJourneyAsync(shareCode.Trim(), cancellationToken);
+        if (row?.Journey == null || !row.IsActive) return null;
+
+        var j = row.Journey;
+        if (IsTerminalJourneyStatus(j.Status)) return null;
+
+        var displayName = (await _userProfileRepository.GetByUserIdAsync(travelerId, cancellationToken))?.FullName?.Trim()
+            ?? "Thành viên";
+
+        if (j.TravelerId == travelerId)
+        {
+            var owner = await _journeyMemberRepository.EnsureOwnerMemberAsync(j.Id, travelerId, displayName, cancellationToken);
+            return MapJoin(owner, j.Id);
+        }
+
+        var existing = await _journeyMemberRepository.GetActiveByTravelerAsync(j.Id, travelerId, cancellationToken);
+        if (existing != null)
+            return MapJoin(existing, j.Id);
+
+        var member = new JourneyMember
+        {
+            JourneyId = j.Id,
+            TravelerId = travelerId,
+            DisplayName = displayName,
+            IsRegisteredUser = true,
+            Role = JourneyMemberRoles.Member,
+            IsActive = true,
+            JoinedAt = DateTime.UtcNow
+        };
+        await _journeyMemberRepository.AddAsync(member, cancellationToken);
+        return MapJoin(member, j.Id);
+    }
+
+    public async Task<JoinJourneyResponse?> JoinGuestByShareCodeAsync(
+        string shareCode,
+        JoinJourneyGuestRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shareCode) || request == null || string.IsNullOrWhiteSpace(request.DisplayName))
+            return null;
+
+        var row = await _sharedJourneyRepository.GetByShareCodeWithJourneyAsync(shareCode.Trim(), cancellationToken);
+        if (row?.Journey == null || !row.IsActive) return null;
+
+        var j = row.Journey;
+        if (IsTerminalJourneyStatus(j.Status)) return null;
+
+        if (request.GuestKey.HasValue)
+        {
+            var existingGuest = await _journeyMemberRepository.GetActiveByGuestKeyAsync(j.Id, request.GuestKey.Value, cancellationToken);
+            if (existingGuest != null)
+                return MapJoin(existingGuest, j.Id, guestKey: existingGuest.GuestKey);
+        }
+
+        var guestKey = request.GuestKey ?? Guid.NewGuid();
+        var member = new JourneyMember
+        {
+            JourneyId = j.Id,
+            GuestKey = guestKey,
+            TravelerId = null,
+            DisplayName = request.DisplayName.Trim(),
+            IsRegisteredUser = false,
+            Role = JourneyMemberRoles.Member,
+            IsActive = true,
+            JoinedAt = DateTime.UtcNow
+        };
+        await _journeyMemberRepository.AddAsync(member, cancellationToken);
+        return MapJoin(member, j.Id, guestKey: guestKey);
+    }
+
+    public async Task<bool> LeaveJourneyAsync(Guid journeyId, Guid travelerId, CancellationToken cancellationToken = default)
+    {
+        var m = await _journeyMemberRepository.GetActiveByTravelerAsync(journeyId, travelerId, cancellationToken);
+        if (m == null || m.Role == JourneyMemberRoles.Owner)
+            return false;
+
+        m.IsActive = false;
+        m.LeftAt = DateTime.UtcNow;
+        await _journeyMemberRepository.UpdateAsync(m, cancellationToken);
+        return true;
+    }
+
+    public async Task<bool> LeaveJourneyGuestAsync(Guid journeyId, Guid guestKey, CancellationToken cancellationToken = default)
+    {
+        var m = await _journeyMemberRepository.GetActiveByGuestKeyAsync(journeyId, guestKey, cancellationToken);
+        if (m == null || m.Role == JourneyMemberRoles.Owner)
+            return false;
+
+        m.IsActive = false;
+        m.LeftAt = DateTime.UtcNow;
+        await _journeyMemberRepository.UpdateAsync(m, cancellationToken);
+        return true;
+    }
+
+    private static JoinJourneyResponse MapJoin(JourneyMember m, Guid journeyId, Guid? guestKey = null) =>
+        new()
+        {
+            JourneyId = journeyId,
+            MemberId = m.Id,
+            Role = m.Role,
+            DisplayName = m.DisplayName,
+            GuestKey = guestKey ?? m.GuestKey
+        };
+
+    private static bool IsTerminalJourneyStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return false;
+        return status.Equals("completed", StringComparison.OrdinalIgnoreCase)
+               || status.Equals("cancelled", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<string> GenerateUniqueShareCodeAsync(CancellationToken cancellationToken)

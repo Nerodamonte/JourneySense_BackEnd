@@ -7,6 +7,7 @@ using JSEA_Application.Enums;
 using JSEA_Presentation.Services;
 using PayOS;
 
+using JSEA_Presentation.Hubs;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -19,6 +20,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using JSEA_Application.Services.Journey;
+using JSEA_Application.Options;
 using JSEA_Application.Services.Portal;
 using JSEA_Infrastructure.Services;
 using JSEA_Application.Services.Profile;
@@ -26,6 +28,7 @@ using JSEA_Presentation.JsonConverters;
 using JSEA_Application.Services.Category;
 using JSEA_Application.Services.Package;
 using JSEA_Application.Services.UserPackage;
+using Microsoft.Extensions.Caching.Distributed;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -121,13 +124,33 @@ else
 builder.Services.AddScoped<JSEA_Infrastructure.Services.OpenMeteo.OpenMeteoWeatherService>();
 builder.Services.AddScoped<IWeatherService, JSEA_Infrastructure.Services.OpenMeteo.CachingWeatherService>();
 builder.Services.AddScoped<IJourneyService, JourneyService>();
+builder.Services.Configure<JourneyShareOptions>(
+    builder.Configuration.GetSection(JourneyShareOptions.SectionName));
 builder.Services.AddScoped<IJourneyRepository, JourneyRepository>();
 builder.Services.AddScoped<IJourneyProgressService, JourneyProgressService>();
 builder.Services.AddScoped<IAchievementRepository, AchievementRepository>();
 builder.Services.AddScoped<IRewardTransactionRepository, RewardTransactionRepository>();
 builder.Services.AddScoped<ISharedJourneyRepository, SharedJourneyRepository>();
+builder.Services.AddScoped<IJourneyMemberRepository, JourneyMemberRepository>();
 builder.Services.AddScoped<IJourneyShareService, JSEA_Application.Services.Journey.JourneyShareService>();
 builder.Services.AddScoped<IEmergencyNearbyService, JSEA_Application.Services.Journey.EmergencyNearbyService>();
+
+if (!string.IsNullOrWhiteSpace(redisConn))
+{
+    builder.Services.AddSignalR().AddStackExchangeRedis(redisConn!, options =>
+    {
+        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("JSEA:");
+    });
+}
+else
+{
+    builder.Services.AddSignalR();
+}
+
+builder.Services.AddSingleton<JourneyLiveLocationRateLimiter>();
+builder.Services.AddSingleton<IJourneyLocationCache>(sp =>
+    new JSEA_Infrastructure.Services.RedisJourneyLocationCache(sp.GetRequiredService<IDistributedCache>()));
+builder.Services.AddSingleton<IJourneyLiveNotifier, JourneyLiveNotifier>();
 
 //Embedding
 builder.Services.AddScoped<IExperienceEmbeddingRepository, ExperienceEmbeddingRepository>();
@@ -210,6 +233,20 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero,
             RoleClaimType = ClaimTypes.Role
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/hubs/journey-live"))
+                    context.Token = accessToken;
+
+                return Task.CompletedTask;
+            }
         };
     })
 
@@ -323,6 +360,7 @@ app.UseAuthorization();
 app.UseStaticFiles();
 
 app.MapControllers();
+app.MapHub<JourneyLiveHub>("/hubs/journey-live");
 
 #endregion
 
