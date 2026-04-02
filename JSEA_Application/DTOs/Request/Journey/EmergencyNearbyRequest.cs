@@ -27,11 +27,19 @@ public class EmergencyNearbyRequest
     [StringLength(120)]
     public string? PlaceKeyword { get; set; }
 
-    /// <summary>Số kết quả (đã sắp gần → xa). Mặc định 1 cho luồng một nút; tối đa 10.</summary>
+    /// <summary>
+    /// Số kết quả (đã sắp gần → xa). Mặc định theo <c>type</c>: bv/xăng/sửa xe/thuốc → 1; quán ăn/nhà nghỉ/cà phê → 5. Tối đa 10.
+    /// </summary>
     [Range(1, 10)]
     public int? MaxResults { get; set; }
 
     /// <summary>Tuỳ chọn: walking | bicycle | motorbike | car. Mặc định motorbike nếu bỏ trống.</summary>
     [StringLength(20)]
     public string? VehicleType { get; set; }
+
+    /// <summary>Nếu có, chỉ **owner hoặc member active** của journey này mới gọi được (JWT hoặc <see cref="GuestKey"/>).</summary>
+    public Guid? JourneyId { get; set; }
+
+    /// <summary>Khách (Kahoot-style): bắt buộc khi gọi không JWT và có <see cref="JourneyId"/>; phải trùng member active đã join.</summary>
+    public Guid? GuestKey { get; set; }
 }

@@ -19,6 +19,11 @@ public interface IJourneyRepository
     /// </summary>
     Task<JourneyWaypoint?> GetWaypointForTravelerAsync(Guid journeyId, Guid waypointId, Guid travelerId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Waypoint thuộc journey (sau khi đã xác thực participant). Include Journey.
+    /// </summary>
+    Task<JourneyWaypoint?> GetWaypointForJourneyAsync(Guid journeyId, Guid waypointId, CancellationToken cancellationToken = default);
+
     Task<Journey> UpdateAsync(Journey journey, CancellationToken cancellationToken = default);
     Task<JourneyWaypoint> UpdateWaypointAsync(JourneyWaypoint waypoint, CancellationToken cancellationToken = default);
     Task<List<Journey>> GetByTravelerIdAsync(Guid travelerId, CancellationToken cancellationToken = default);

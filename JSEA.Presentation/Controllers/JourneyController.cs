@@ -1,9 +1,11 @@
+using JSEA_Application.DTOs.Journey;
 using JSEA_Application.DTOs.Request.Journey;
 using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.DTOs.Request.JourneyProgress;
 using JSEA_Application.DTOs.Respone.JourneyProgress;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Enums;
+using JSEA_Presentation.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -18,17 +20,29 @@ public class JourneyController : ControllerBase
     private readonly ISuggestService _suggestService;
     private readonly IJourneyProgressService _journeyProgressService;
     private readonly IJourneyShareService _journeyShareService;
+    private readonly IJourneyLocationCache _locationCache;
+    private readonly IJourneyLiveNotifier _liveNotifier;
+    private readonly IJourneyMemberRepository _memberRepo;
+    private readonly JourneyLiveLocationRateLimiter _rateLimiter;
 
     public JourneyController(
         IJourneyService journeyService,
         ISuggestService suggestService,
         IJourneyProgressService journeyProgressService,
-        IJourneyShareService journeyShareService)
+        IJourneyShareService journeyShareService,
+        IJourneyLocationCache locationCache,
+        IJourneyLiveNotifier liveNotifier,
+        IJourneyMemberRepository memberRepo,
+        JourneyLiveLocationRateLimiter rateLimiter)
     {
         _journeyService = journeyService;
         _suggestService = suggestService;
         _journeyProgressService = journeyProgressService;
         _journeyShareService = journeyShareService;
+        _locationCache = locationCache;
+        _liveNotifier = liveNotifier;
+        _memberRepo = memberRepo;
+        _rateLimiter = rateLimiter;
     }
 
     /// <summary>
@@ -87,10 +101,10 @@ public class JourneyController : ControllerBase
     }
 
     /// <summary>
-    /// Lấy polyline tuyến đi qua các waypoint đã chọn (để FE vẽ map). (Authorized)
+    /// Lấy polyline tuyến đi qua các waypoint đã chọn (để FE vẽ map). JWT hoặc <c>guestKey</c> (member đã join).
     /// </summary>
     [HttpGet("{journeyId:guid}/polyline")]
-    [Authorize]
+    [AllowAnonymous]
     [ProducesResponseType(typeof(JourneyPolylineResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -99,13 +113,21 @@ public class JourneyController : ControllerBase
     public async Task<IActionResult> GetJourneyPolyline(
         Guid journeyId,
         CancellationToken cancellationToken,
+        [FromQuery] Guid? guestKey,
         [FromQuery] double? latitude,
         [FromQuery] double? longitude,
         [FromQuery] bool excludeCompletedWaypoints = true)
     {
-        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
-            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+        Guid? travelerId = null;
+        if (User?.Identity?.IsAuthenticated == true &&
+            Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var tid))
+            travelerId = tid;
+
+        if (!travelerId.HasValue && !guestKey.HasValue)
+            return Unauthorized(new { message = "Cần đăng nhập hoặc guestKey của thành viên đã join." });
+
+        if (travelerId.HasValue)
+            guestKey = null;
 
         if ((latitude.HasValue && !longitude.HasValue) || (!latitude.HasValue && longitude.HasValue))
             return BadRequest(new { message = "Vui lòng truyền đủ latitude và longitude." });
@@ -115,17 +137,27 @@ public class JourneyController : ControllerBase
             JourneyPolylineResponse? polyline;
             if (latitude.HasValue && longitude.HasValue)
             {
-                polyline = await _journeyService.GetNearestWaypointPolylineAsync(
-                    journeyId,
-                    travelerId,
-                    latitude.Value,
-                    longitude.Value,
-                    excludeCompletedWaypoints,
-                    cancellationToken);
+                polyline = travelerId.HasValue
+                    ? await _journeyService.GetNearestWaypointPolylineAsync(
+                        journeyId,
+                        travelerId.Value,
+                        latitude.Value,
+                        longitude.Value,
+                        excludeCompletedWaypoints,
+                        cancellationToken)
+                    : await _journeyService.GetNearestWaypointPolylineForGuestAsync(
+                        journeyId,
+                        guestKey!.Value,
+                        latitude.Value,
+                        longitude.Value,
+                        excludeCompletedWaypoints,
+                        cancellationToken);
             }
             else
             {
-                polyline = await _journeyService.GetJourneyPolylineAsync(journeyId, travelerId, cancellationToken);
+                polyline = travelerId.HasValue
+                    ? await _journeyService.GetJourneyPolylineAsync(journeyId, travelerId.Value, cancellationToken)
+                    : await _journeyService.GetJourneyPolylineForGuestAsync(journeyId, guestKey!.Value, cancellationToken);
             }
 
             if (polyline == null)
@@ -145,6 +177,46 @@ public class JourneyController : ControllerBase
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Tooltip x/N tại từng waypoint: N = số thành viên active; arrivedCount = đã check-in/out hoặc skip. JWT hoặc <c>guestKey</c>.
+    /// </summary>
+    [HttpGet("{journeyId:guid}/waypoints/attendance")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(JourneyWaypointAttendanceResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetWaypointAttendance(
+        Guid journeyId,
+        CancellationToken cancellationToken,
+        [FromQuery] Guid? guestKey = null)
+    {
+        Guid? travelerId = null;
+        if (User?.Identity?.IsAuthenticated == true &&
+            Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var tid))
+            travelerId = tid;
+
+        if (!travelerId.HasValue && !guestKey.HasValue)
+            return Unauthorized(new { message = "Cần đăng nhập hoặc guestKey của thành viên đã join." });
+
+        if (travelerId.HasValue)
+            guestKey = null;
+
+        try
+        {
+            var result = travelerId.HasValue
+                ? await _journeyService.GetWaypointAttendanceAsync(journeyId, travelerId.Value, cancellationToken)
+                : await _journeyService.GetWaypointAttendanceForGuestAsync(journeyId, guestKey!.Value, cancellationToken);
+            if (result == null)
+                return NotFound(new { message = "Không tìm thấy hành trình." });
+
+            return Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return NotFound(new { message = "Không tìm thấy hành trình." });
         }
     }
 
@@ -558,6 +630,235 @@ public class JourneyController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Gia nhập hành trình qua mã chia sẻ (user đã đăng nhập).</summary>
+    [HttpPost("shared/{shareCode}/join")]
+    [Authorize]
+    [ProducesResponseType(typeof(JoinJourneyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> JoinSharedJourney(string shareCode, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var result = await _journeyShareService.JoinByShareCodeAsync(shareCode, travelerId, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không thể tham gia (link không hợp lệ hoặc hành trình đã kết thúc)." });
+
+        return Ok(result);
+    }
+
+    /// <summary>Gia nhập với tên hiển thị (khách, không đăng nhập).</summary>
+    [HttpPost("shared/{shareCode}/join-guest")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(JoinJourneyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> JoinSharedJourneyAsGuest(
+        string shareCode,
+        [FromBody] JoinJourneyGuestRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _journeyShareService.JoinGuestByShareCodeAsync(shareCode, request, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không thể tham gia (link không hợp lệ hoặc hành trình đã kết thúc)." });
+
+        return Ok(result);
+    }
+
+    /// <summary>Rời khỏi hành trình với tư cách thành viên (không áp dụng owner).</summary>
+    [HttpPost("{journeyId:guid}/leave")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> LeaveJourney(Guid journeyId, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var ok = await _journeyShareService.LeaveJourneyAsync(journeyId, travelerId, cancellationToken);
+        if (!ok)
+            return BadRequest(new { message = "Không thể rời đi (bạn không phải thành viên hoặc là chủ hành trình)." });
+
+        return Ok(new { message = "Đã rời khỏi hành trình." });
+    }
+
+    [HttpPost("{journeyId:guid}/leave-guest")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> LeaveJourneyAsGuest(
+        Guid journeyId,
+        [FromBody] GuestKeyBodyRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var ok = await _journeyShareService.LeaveJourneyGuestAsync(journeyId, request.GuestKey, cancellationToken);
+        if (!ok)
+            return BadRequest(new { message = "Không thể rời đi (không tìm thấy khách hoặc là chủ hành trình)." });
+
+        return Ok(new { message = "Đã rời khỏi hành trình." });
+    }
+
+    [HttpPost("{journeyId:guid}/destination/checkin")]
+    [Authorize]
+    [ProducesResponseType(typeof(DestinationCheckpointResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DestinationCheckIn(Guid journeyId, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var result = await _journeyProgressService.DestinationCheckInAsync(journeyId, travelerId, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không tìm thấy hành trình hoặc bạn chưa tham gia / hành trình chưa bắt đầu." });
+
+        return Ok(result);
+    }
+
+    [HttpPost("{journeyId:guid}/destination/checkout")]
+    [Authorize]
+    [ProducesResponseType(typeof(DestinationCheckpointResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DestinationCheckOut(Guid journeyId, CancellationToken cancellationToken)
+    {
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var travelerId))
+            return Unauthorized(new { message = "Vui lòng đăng nhập." });
+
+        var result = await _journeyProgressService.DestinationCheckOutAsync(journeyId, travelerId, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không tìm thấy hành trình hoặc bạn chưa tham gia / hành trình chưa bắt đầu." });
+
+        return Ok(result);
+    }
+
+    [HttpPost("{journeyId:guid}/destination/checkin-guest")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(DestinationCheckpointResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DestinationCheckInGuest(
+        Guid journeyId,
+        [FromBody] GuestKeyBodyRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _journeyProgressService.DestinationCheckInGuestAsync(journeyId, request.GuestKey, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không tìm thấy hành trình hoặc guest key không hợp lệ / hành trình chưa bắt đầu." });
+
+        return Ok(result);
+    }
+
+    [HttpPost("{journeyId:guid}/destination/checkout-guest")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(DestinationCheckpointResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DestinationCheckOutGuest(
+        Guid journeyId,
+        [FromBody] GuestKeyBodyRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var result = await _journeyProgressService.DestinationCheckOutGuestAsync(journeyId, request.GuestKey, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không tìm thấy hành trình hoặc guest key không hợp lệ / hành trình chưa bắt đầu." });
+
+        return Ok(result);
+    }
+
+    [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/checkin-guest")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(WaypointCheckInResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CheckInGuest(
+        Guid journeyId,
+        Guid waypointId,
+        [FromBody] GuestWaypointCheckInRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var inner = new WaypointCheckInRequest
+        {
+            FeedbackText = request.FeedbackText,
+            PhotoUrls = request.PhotoUrls
+        };
+
+        var result = await _journeyProgressService.CheckInGuestAsync(
+            journeyId, waypointId, request.GuestKey, inner, cancellationToken);
+        if (result == null)
+            return NotFound(new { message = "Không tìm thấy waypoint hoặc guest key / hành trình chưa bắt đầu." });
+
+        return Ok(result);
+    }
+
+    [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/checkout-guest")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(WaypointCheckOutResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> CheckOutGuest(
+        Guid journeyId,
+        Guid waypointId,
+        [FromBody] GuestWaypointCheckOutRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var inner = new WaypointCheckOutRequest { RatingValue = request.RatingValue };
+
+        var result = await _journeyProgressService.CheckOutGuestAsync(
+            journeyId, waypointId, request.GuestKey, inner, cancellationToken);
+        if (result == null)
+            return BadRequest(new { message = "Không thể check-out (rating 1–5 nếu gửi, hoặc waypoint không hợp lệ)." });
+
+        return Ok(result);
+    }
+
+    /// <summary>Skip waypoint với tư cách khách (chỉ cập nhật tiến độ thành viên; không trả polyline).</summary>
+    [HttpPost("{journeyId:guid}/waypoints/{waypointId:guid}/skip-guest")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(WaypointSkipResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> SkipWaypointGuest(
+        Guid journeyId,
+        Guid waypointId,
+        [FromBody] GuestKeyBodyRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var skipped = await _journeyProgressService.SkipWaypointGuestAsync(
+            journeyId, waypointId, request.GuestKey, cancellationToken);
+        if (skipped == null)
+            return NotFound(new { message = "Không tìm thấy waypoint hoặc guest key / hành trình chưa bắt đầu." });
+
+        return Ok(skipped);
+    }
+
     [HttpPut("{journeyId:guid}/journey-feedback")]
     [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -583,4 +884,123 @@ public class JourneyController : ControllerBase
 
         return Ok(new { message = "Đã cập nhật feedback." });
     }
+
+    #region Live Location (REST pipeline: validate → Redis → SignalR broadcast)
+
+    /// <summary>
+    /// GPS realtime: app gửi vị trí hiện tại (1–3 giây / lần). Server lưu Redis (TTL 5 phút) rồi broadcast <c>MemberLocationUpdated</c> qua SignalR.
+    /// JWT hoặc <c>guestKey</c>.
+    /// </summary>
+    [HttpPost("{journeyId:guid}/live-location")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UpdateLiveLocation(
+        Guid journeyId,
+        [FromBody] UpdateLiveLocationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || !ModelState.IsValid)
+            return BadRequest(ModelState);
+
+        var (member, errorResult) = await ResolveLiveMemberAsync(journeyId, request.GuestKey, cancellationToken);
+        if (errorResult != null) return errorResult;
+
+        if (!_rateLimiter.TryAllow(member!.Id))
+            return NoContent();
+
+        var notification = new JourneyMemberLocationNotification
+        {
+            JourneyId = journeyId,
+            MemberId = member.Id,
+            TravelerId = member.TravelerId,
+            GuestKey = member.GuestKey,
+            DisplayName = member.DisplayName,
+            Role = member.Role,
+            Latitude = request.Latitude,
+            Longitude = request.Longitude,
+            AccuracyMeters = request.AccuracyMeters,
+            HeadingDegrees = request.HeadingDegrees,
+            AtUtc = DateTime.UtcNow
+        };
+
+        await _locationCache.SetAsync(notification, cancellationToken);
+        await _liveNotifier.NotifyMemberLocationAsync(notification, cancellationToken);
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// Snapshot vị trí mới nhất tất cả member đang active — gọi 1 lần khi mở map để khởi tạo markers.
+    /// JWT hoặc <c>guestKey</c>.
+    /// </summary>
+    [HttpGet("{journeyId:guid}/live-locations")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(List<JourneyMemberLocationNotification>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetLiveLocations(
+        Guid journeyId,
+        CancellationToken cancellationToken,
+        [FromQuery] Guid? guestKey = null)
+    {
+        var (member, errorResult) = await ResolveLiveMemberAsync(journeyId, guestKey, cancellationToken);
+        if (errorResult != null) return errorResult;
+
+        var activeMembers = await _memberRepo.GetActiveMembersAsync(journeyId, cancellationToken);
+        var memberIds = activeMembers.Select(m => m.Id);
+        var locations = await _locationCache.GetAllForJourneyAsync(journeyId, memberIds, cancellationToken);
+
+        return Ok(locations);
+    }
+
+    private async Task<(JSEA_Application.Models.JourneyMember? Member, IActionResult? ErrorResult)> ResolveLiveMemberAsync(
+        Guid journeyId,
+        Guid? guestKey,
+        CancellationToken cancellationToken)
+    {
+        Guid? travelerId = null;
+        if (User?.Identity?.IsAuthenticated == true &&
+            Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var tid))
+            travelerId = tid;
+
+        if (!travelerId.HasValue && !guestKey.HasValue)
+            return (null, Unauthorized(new { message = "Cần đăng nhập hoặc guestKey." }));
+
+        if (travelerId.HasValue)
+            guestKey = null;
+
+        try
+        {
+            if (travelerId.HasValue)
+                await _journeyService.VerifyTravelerCanNavigateStartedJourneyAsync(journeyId, travelerId.Value, cancellationToken);
+            else
+                await _journeyService.VerifyGuestCanNavigateStartedJourneyAsync(journeyId, guestKey!.Value, cancellationToken);
+        }
+        catch (KeyNotFoundException)
+        {
+            return (null, NotFound(new { message = "Không tìm thấy hành trình." }));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return (null, NotFound(new { message = "Không tìm thấy hành trình." }));
+        }
+        catch (InvalidOperationException)
+        {
+            return (null, BadRequest(new { message = "Hành trình chưa bắt đầu." }));
+        }
+
+        JSEA_Application.Models.JourneyMember? member = travelerId.HasValue
+            ? await _memberRepo.GetActiveByTravelerAsync(journeyId, travelerId.Value, cancellationToken)
+            : await _memberRepo.GetActiveByGuestKeyAsync(journeyId, guestKey!.Value, cancellationToken);
+
+        if (member == null)
+            return (null, NotFound(new { message = "Không tìm thấy thành viên." }));
+
+        return (member, null);
+    }
+
+    #endregion
 }

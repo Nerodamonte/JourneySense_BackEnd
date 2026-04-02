@@ -28,8 +28,8 @@ public class EmergencyNearbyService : IEmergencyNearbyService
     }
 
     /// <summary>
-    /// Một luồng duy nhất cho mọi type (repair_shop … coffee): Autocomplete keyword khác nhau trong <see cref="EmergencyPlaceTypes.SearchInputFor"/>,
-    /// còn Detail + Directions + fallback đường chim y hệt hospital/pharmacy.
+    /// Autocomplete theo <see cref="EmergencyPlaceTypes.SearchInputFor"/>;
+    /// khẩn cấp (bv, xăng, sửa xe, thuốc) mặc định <c>maxResults = 1</c>; ăn/nghỉ/cà phê mặc định <c>5</c> để list chọn (vẫn có polyline từng dòng nếu Goong trả direction).
     /// </summary>
     public async Task<(int StatusCode, string? ErrorMessage, IReadOnlyList<EmergencyNearbyItemResponse> Items)> GetNearbyAsync(
         EmergencyNearbyRequest request,
@@ -43,7 +43,8 @@ public class EmergencyNearbyService : IEmergencyNearbyService
 
         var rawRadius = request.RadiusMeters is > 0 ? request.RadiusMeters!.Value : DefaultRadiusMeters;
         var userRadius = Math.Clamp(rawRadius, 100, MaxRadiusMeters);
-        var maxResults = request.MaxResults is > 0 ? request.MaxResults!.Value : 1;
+        var defaultMax = EmergencyPlaceTypes.PrefersSingleRoute(placeType) ? 1 : 5;
+        var maxResults = request.MaxResults is > 0 ? request.MaxResults!.Value : defaultMax;
         maxResults = Math.Min(maxResults, 10);
 
         var searchInput = ResolveSearchInput(placeType, request.PlaceKeyword, request.VehicleType);

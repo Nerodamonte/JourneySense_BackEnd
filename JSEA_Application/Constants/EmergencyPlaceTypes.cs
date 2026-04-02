@@ -1,6 +1,6 @@
 namespace JSEA_Application.Constants;
 
-/// <summary>Giá trị <c>type</c> trong POST /api/emergency/nearby. Khác nhau chỉ ở từ khóa autocomplete; pipeline Detail+Directions là một cho cả 7 giá trị.</summary>
+/// <summary>Giá trị <c>type</c> trong POST /api/emergency/nearby. Từ khóa autocomplete khác nhau; mặc định số kết quả: khẩn cấp → 1 (ưu tiên vẽ tuyến gần nhất), ăn/nghỉ/cà phê → list chọn.</summary>
 public static class EmergencyPlaceTypes
 {
     public const string RepairShop = "repair_shop";
@@ -18,6 +18,12 @@ public static class EmergencyPlaceTypes
 
     /// <summary>Uống nước / quán cà phê.</summary>
     public const string Coffee = "coffee";
+
+    /// <summary>
+    /// Bệnh viện, xăng, sửa xe, thuốc: mặc định 1 điểm + tuyến; SignalR chỉ loại này (trừ khi client chỉnh MaxResults list 1 kết quả).
+    /// </summary>
+    public static bool PrefersSingleRoute(string normalizedPlaceType) =>
+        normalizedPlaceType is Hospital or Pharmacy or GasStation or RepairShop;
 
     public static bool IsValid(string? value)
     {
