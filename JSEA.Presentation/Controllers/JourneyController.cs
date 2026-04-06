@@ -5,6 +5,7 @@ using JSEA_Application.DTOs.Request.JourneyProgress;
 using JSEA_Application.DTOs.Respone.JourneyProgress;
 using JSEA_Application.Interfaces;
 using JSEA_Application.Enums;
+using JSEA_Application.Constants;
 using JSEA_Presentation.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -62,6 +63,10 @@ public class JourneyController : ControllerBase
         return Ok(list);
     }
 
+    /// <summary>
+    /// Xem lịch sử chuyến đã hoàn thành qua mã share (gallery). Chỉ trả dữ liệu khi journey completed.
+    /// Không dùng làm preview trước khi join multiplayer: dùng POST join trên shared journey, sau đó GET polyline theo journeyId.
+    /// </summary>
     [HttpGet("shared/{shareCode}")]
     [ProducesResponseType(typeof(PublicSharedJourneyDetailResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -73,6 +78,7 @@ public class JourneyController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>Danh sách các chuyến đã share và đã completed (feed khám phá).</summary>
     [HttpGet("shared")]
     [ProducesResponseType(typeof(List<PublicSharedJourneyListItemResponse>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetPublicSharedJourneys(
@@ -218,6 +224,73 @@ public class JourneyController : ControllerBase
         {
             return NotFound(new { message = "Không tìm thấy hành trình." });
         }
+    }
+
+    /// <summary>
+    /// Thành viên đang active (phòng chờ + đang đi). Không yêu cầu journey đã start. JWT hoặc <c>guestKey</c> (poll ~5s).
+    /// </summary>
+    [HttpGet("{journeyId:guid}/members")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(List<JourneyMemberRosterItemResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetJourneyMembers(
+        Guid journeyId,
+        CancellationToken cancellationToken,
+        [FromQuery] Guid? guestKey = null)
+    {
+        Guid? travelerId = null;
+        if (User?.Identity?.IsAuthenticated == true &&
+            Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var tid))
+            travelerId = tid;
+
+        if (!travelerId.HasValue && !guestKey.HasValue)
+            return Unauthorized(new { message = "Cần đăng nhập hoặc guestKey của thành viên đã join." });
+
+        if (travelerId.HasValue)
+            guestKey = null;
+
+        try
+        {
+            if (travelerId.HasValue)
+                await _journeyService.VerifyTravelerCanNavigateJourneyAsync(journeyId, travelerId.Value, cancellationToken);
+            else
+                await _journeyService.VerifyGuestCanNavigateJourneyAsync(journeyId, guestKey!.Value, cancellationToken);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { message = "Không tìm thấy hành trình." });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return NotFound(new { message = "Không tìm thấy hành trình." });
+        }
+
+        var active = await _memberRepo.GetActiveMembersAsync(journeyId, cancellationToken);
+        var ordered = active
+            .OrderBy(m => string.Equals(m.Role, JourneyMemberRoles.Owner, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+            .ThenBy(m => m.JoinedAt)
+            .ToList();
+
+        var locs = await _locationCache.GetAllForJourneyAsync(journeyId, ordered.Select(m => m.Id), cancellationToken);
+        var locById = locs.ToDictionary(x => x.MemberId);
+
+        var list = ordered.Select(m =>
+        {
+            locById.TryGetValue(m.Id, out var loc);
+            return new JourneyMemberRosterItemResponse
+            {
+                MemberId = m.Id,
+                DisplayName = m.DisplayName,
+                Role = m.Role,
+                IsGuest = m.GuestKey.HasValue,
+                JoinedAt = m.JoinedAt,
+                Latitude = loc?.Latitude,
+                Longitude = loc?.Longitude
+            };
+        }).ToList();
+
+        return Ok(list);
     }
 
     /// <summary>

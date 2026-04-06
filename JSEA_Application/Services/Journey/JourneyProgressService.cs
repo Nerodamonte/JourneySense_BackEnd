@@ -56,7 +56,8 @@ public class JourneyProgressService : IJourneyProgressService
         if (journey == null) return null;
         if (journey.TravelerId != travelerId) return null;
 
-        if (!journey.StartedAt.HasValue)
+        var firstStart = !journey.StartedAt.HasValue;
+        if (firstStart)
         {
             journey.StartedAt = DateTime.UtcNow;
             journey.Status = JourneyStatus.InProgress.ToString();
@@ -66,6 +67,17 @@ public class JourneyProgressService : IJourneyProgressService
 
         var name = (await _userProfileRepository.GetByUserIdAsync(travelerId, cancellationToken))?.FullName?.Trim() ?? "Owner";
         await _journeyMemberRepository.EnsureOwnerMemberAsync(journeyId, travelerId, name, cancellationToken);
+
+        if (firstStart)
+        {
+            await _journeyLiveNotifier.NotifyJourneyStartedAsync(
+                new JourneyStartedLiveNotification
+                {
+                    JourneyId = journey.Id,
+                    StartedAt = journey.StartedAt!.Value
+                },
+                cancellationToken);
+        }
 
         return new StartJourneyResponse
         {
