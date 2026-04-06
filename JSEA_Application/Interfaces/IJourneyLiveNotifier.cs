@@ -26,4 +26,16 @@ public interface IJourneyLiveNotifier
     Task NotifyWaypointAttendanceUpdatedAsync(
         JourneyWaypointAttendanceResponse snapshot,
         CancellationToken cancellationToken = default);
+
+    Task NotifyMemberJoinedAsync(
+        JourneyMemberJoinedNotification notification,
+        CancellationToken cancellationToken = default);
+
+    Task NotifyMemberLeftAsync(
+        JourneyMemberLeftNotification notification,
+        CancellationToken cancellationToken = default);
+
+    Task NotifyJourneyStartedAsync(
+        JourneyStartedLiveNotification notification,
+        CancellationToken cancellationToken = default);
 }

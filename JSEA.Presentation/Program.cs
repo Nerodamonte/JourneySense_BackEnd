@@ -99,20 +99,23 @@ builder.Services.Configure<JSEA_Infrastructure.Services.Goong.GoongOptions>(
     builder.Configuration.GetSection(JSEA_Infrastructure.Services.Goong.GoongOptions.SectionName));
 builder.Services.AddScoped<IGoongMapsService, JSEA_Infrastructure.Services.Goong.GoongMapsService>();
 
-// Thời tiết: Open-Meteo + cache. Redis chỉ khi có ConnectionStrings:Redis VÀ WeatherCache:UseRedis != false.
+// Thời tiết: Open-Meteo + cache. Redis khi có Redis:ConnectionString (hoặc ConnectionStrings:Redis) VÀ WeatherCache:UseRedis != false.
 builder.Services.Configure<JSEA_Infrastructure.Services.OpenMeteo.WeatherCacheOptions>(
     builder.Configuration.GetSection(JSEA_Infrastructure.Services.OpenMeteo.WeatherCacheOptions.SectionName));
 var weatherCacheOpts = builder.Configuration
     .GetSection(JSEA_Infrastructure.Services.OpenMeteo.WeatherCacheOptions.SectionName)
     .Get<JSEA_Infrastructure.Services.OpenMeteo.WeatherCacheOptions>()
     ?? new JSEA_Infrastructure.Services.OpenMeteo.WeatherCacheOptions();
-var redisConn = builder.Configuration.GetConnectionString("Redis");
+var redisSection = builder.Configuration.GetSection("Redis");
+var redisConn = redisSection["ConnectionString"] ?? builder.Configuration.GetConnectionString("Redis");
+var redisDatabase = redisSection.GetValue("Database", 0);
 var useRedis = !string.IsNullOrWhiteSpace(redisConn) && weatherCacheOpts.UseRedis != false;
 if (useRedis)
 {
     builder.Services.AddStackExchangeRedisCache(options =>
     {
-        options.Configuration = redisConn;
+        options.ConfigurationOptions = StackExchange.Redis.ConfigurationOptions.Parse(redisConn!);
+        options.ConfigurationOptions.DefaultDatabase = redisDatabase;
         options.InstanceName = "JSEA:";
     });
 }
@@ -137,7 +140,10 @@ builder.Services.AddScoped<IEmergencyNearbyService, JSEA_Application.Services.Jo
 
 if (!string.IsNullOrWhiteSpace(redisConn))
 {
-    builder.Services.AddSignalR().AddStackExchangeRedis(redisConn!, options =>
+    var signalRConn = redisConn!.Contains("defaultDatabase=", StringComparison.OrdinalIgnoreCase)
+        ? redisConn
+        : $"{redisConn.TrimEnd(',', ' ')},defaultDatabase={redisDatabase}";
+    builder.Services.AddSignalR().AddStackExchangeRedis(signalRConn, options =>
     {
         options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("JSEA:");
     });

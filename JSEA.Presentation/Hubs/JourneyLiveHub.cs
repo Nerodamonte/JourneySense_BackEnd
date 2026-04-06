@@ -9,8 +9,7 @@ using Microsoft.AspNetCore.SignalR;
 namespace JSEA_Presentation.Hubs;
 
 /// <summary>
-/// Realtime chuyến đi: <c>JoinJourney</c> sau khi kết nối; <c>UpdateLocation</c> gửi GPS qua WebSocket (fallback nếu REST không ổn).
-/// Cả hai đều ghi Redis + broadcast SignalR.
+/// Realtime chuyến đi: <c>JoinJourney</c> có thể gọi trước khi start (lobby) hoặc sau start; <c>UpdateLocation</c> chỉ sau start — ghi Redis + broadcast.
 /// </summary>
 public class JourneyLiveHub : Hub
 {
@@ -42,8 +41,8 @@ public class JourneyLiveHub : Hub
         var journey = await journeys.GetBasicByIdAsync(journeyId, Context.ConnectionAborted);
         if (journey == null)
             throw new HubException("Không tìm thấy hành trình.");
-        if (!journey.StartedAt.HasValue)
-            throw new HubException("Hành trình chưa bắt đầu.");
+        if (IsTerminalJourneyStatus(journey.Status))
+            throw new HubException("Hành trình đã kết thúc.");
 
         Guid? travelerId = null;
         if (Context.User?.Identity?.IsAuthenticated == true &&
@@ -144,6 +143,13 @@ public class JourneyLiveHub : Hub
     public async Task LeaveJourney(Guid journeyId)
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, JourneyLiveGroups.ForJourney(journeyId));
+    }
+
+    private static bool IsTerminalJourneyStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return false;
+        return status.Equals("completed", StringComparison.OrdinalIgnoreCase)
+               || status.Equals("cancelled", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsValidGps(double latitude, double longitude)
