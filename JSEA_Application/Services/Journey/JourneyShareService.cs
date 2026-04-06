@@ -1,4 +1,5 @@
 using JSEA_Application.Constants;
+using JSEA_Application.DTOs.Journey;
 using JSEA_Application.DTOs.Request.Journey;
 using JSEA_Application.DTOs.Respone.Journey;
 using JSEA_Application.Enums;
@@ -25,6 +26,7 @@ public class JourneyShareService : IJourneyShareService
     private readonly IRatingRepository _ratingRepository;
     private readonly IGoongMapsService _goongMapsService;
     private readonly IJourneyMemberRepository _journeyMemberRepository;
+    private readonly IJourneyLiveNotifier _journeyLiveNotifier;
     private readonly JourneyShareOptions _journeyShareOptions;
 
     /// <summary>Đủ điểm trên LineString đã lưu → không cần gọi lại Directions.</summary>
@@ -41,6 +43,7 @@ public class JourneyShareService : IJourneyShareService
         IRatingRepository ratingRepository,
         IGoongMapsService goongMapsService,
         IJourneyMemberRepository journeyMemberRepository,
+        IJourneyLiveNotifier journeyLiveNotifier,
         IOptions<JourneyShareOptions> journeyShareOptions)
     {
         _journeyRepository = journeyRepository;
@@ -53,6 +56,7 @@ public class JourneyShareService : IJourneyShareService
         _ratingRepository = ratingRepository;
         _goongMapsService = goongMapsService;
         _journeyMemberRepository = journeyMemberRepository;
+        _journeyLiveNotifier = journeyLiveNotifier;
         _journeyShareOptions = journeyShareOptions?.Value ?? new JourneyShareOptions();
     }
 
@@ -72,6 +76,7 @@ public class JourneyShareService : IJourneyShareService
 
         if (existing != null)
         {
+            await EnsureOwnerInRosterAsync(journeyId, travelerId, cancellationToken);
             return new ShareJourneyResponse
             {
                 ShareCode = existing.ShareCode,
@@ -104,6 +109,8 @@ public class JourneyShareService : IJourneyShareService
             refId: journeyId,
             refType: "journey");
 
+        await EnsureOwnerInRosterAsync(journeyId, travelerId, cancellationToken);
+
         return new ShareJourneyResponse
         {
             ShareCode = shareCode,
@@ -111,6 +118,18 @@ public class JourneyShareService : IJourneyShareService
             ShareLink = BuildClientJoinLink(shareCode),
             PointsEarned = points
         };
+    }
+
+    private async Task EnsureOwnerInRosterAsync(Guid journeyId, Guid travelerId, CancellationToken cancellationToken)
+    {
+        var existing = await _journeyMemberRepository.GetActiveByTravelerAsync(journeyId, travelerId, cancellationToken);
+        if (existing != null &&
+            string.Equals(existing.Role, JourneyMemberRoles.Owner, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var displayName = (await _userProfileRepository.GetByUserIdAsync(travelerId, cancellationToken))?.FullName?.Trim() ?? "Owner";
+        var owner = await _journeyMemberRepository.EnsureOwnerMemberAsync(journeyId, travelerId, displayName, cancellationToken);
+        await _journeyLiveNotifier.NotifyMemberJoinedAsync(MapMemberJoined(owner, journeyId), cancellationToken);
     }
 
     /// <summary>Link mở frontend / app; join thật vẫn qua API (cần token hoặc guest body).</summary>
@@ -346,7 +365,10 @@ public class JourneyShareService : IJourneyShareService
 
         if (j.TravelerId == travelerId)
         {
+            var existed = await _journeyMemberRepository.GetActiveByTravelerAsync(j.Id, travelerId, cancellationToken);
             var owner = await _journeyMemberRepository.EnsureOwnerMemberAsync(j.Id, travelerId, displayName, cancellationToken);
+            if (existed == null)
+                await _journeyLiveNotifier.NotifyMemberJoinedAsync(MapMemberJoined(owner, j.Id), cancellationToken);
             return MapJoin(owner, j.Id);
         }
 
@@ -365,6 +387,7 @@ public class JourneyShareService : IJourneyShareService
             JoinedAt = DateTime.UtcNow
         };
         await _journeyMemberRepository.AddAsync(member, cancellationToken);
+        await _journeyLiveNotifier.NotifyMemberJoinedAsync(MapMemberJoined(member, j.Id), cancellationToken);
         return MapJoin(member, j.Id);
     }
 
@@ -402,6 +425,7 @@ public class JourneyShareService : IJourneyShareService
             JoinedAt = DateTime.UtcNow
         };
         await _journeyMemberRepository.AddAsync(member, cancellationToken);
+        await _journeyLiveNotifier.NotifyMemberJoinedAsync(MapMemberJoined(member, j.Id), cancellationToken);
         return MapJoin(member, j.Id, guestKey: guestKey);
     }
 
@@ -411,9 +435,13 @@ public class JourneyShareService : IJourneyShareService
         if (m == null || m.Role == JourneyMemberRoles.Owner)
             return false;
 
+        var leftId = m.Id;
         m.IsActive = false;
         m.LeftAt = DateTime.UtcNow;
         await _journeyMemberRepository.UpdateAsync(m, cancellationToken);
+        await _journeyLiveNotifier.NotifyMemberLeftAsync(
+            new JourneyMemberLeftNotification { JourneyId = journeyId, MemberId = leftId },
+            cancellationToken);
         return true;
     }
 
@@ -423,11 +451,25 @@ public class JourneyShareService : IJourneyShareService
         if (m == null || m.Role == JourneyMemberRoles.Owner)
             return false;
 
+        var leftId = m.Id;
         m.IsActive = false;
         m.LeftAt = DateTime.UtcNow;
         await _journeyMemberRepository.UpdateAsync(m, cancellationToken);
+        await _journeyLiveNotifier.NotifyMemberLeftAsync(
+            new JourneyMemberLeftNotification { JourneyId = journeyId, MemberId = leftId },
+            cancellationToken);
         return true;
     }
+
+    private static JourneyMemberJoinedNotification MapMemberJoined(JourneyMember m, Guid journeyId) =>
+        new()
+        {
+            JourneyId = journeyId,
+            MemberId = m.Id,
+            DisplayName = m.DisplayName,
+            Role = m.Role,
+            IsGuest = m.GuestKey.HasValue
+        };
 
     private static JoinJourneyResponse MapJoin(JourneyMember m, Guid journeyId, Guid? guestKey = null) =>
         new()

@@ -89,4 +89,58 @@ public class JourneyLiveNotifier : IJourneyLiveNotifier
                 snapshot.JourneyId);
         }
     }
+
+    public async Task NotifyMemberJoinedAsync(
+        JourneyMemberJoinedNotification notification,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _hub.Clients
+                .Group(JourneyLiveGroups.ForJourney(notification.JourneyId))
+                .SendAsync("MemberJoined", notification, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "SignalR MemberJoined failed for journey {JourneyId}",
+                notification.JourneyId);
+        }
+    }
+
+    public async Task NotifyMemberLeftAsync(
+        JourneyMemberLeftNotification notification,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _hub.Clients
+                .Group(JourneyLiveGroups.ForJourney(notification.JourneyId))
+                .SendAsync("MemberLeft", notification, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "SignalR MemberLeft failed for journey {JourneyId}",
+                notification.JourneyId);
+        }
+    }
+
+    public async Task NotifyJourneyStartedAsync(
+        JourneyStartedLiveNotification notification,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _hub.Clients
+                .Group(JourneyLiveGroups.ForJourney(notification.JourneyId))
+                .SendAsync("JourneyStarted", notification, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "SignalR JourneyStarted failed for journey {JourneyId}",
+                notification.JourneyId);
+        }
+    }
 }
